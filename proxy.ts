@@ -1,8 +1,9 @@
+// proxy.ts  ← nombre del archivo cambiado
 import { NextRequest, NextResponse } from "next/server";
 
 const PUBLIC_ROUTES = ["/login"];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const token = req.cookies.get("token")?.value;
   const isPublic = PUBLIC_ROUTES.some((r) => req.nextUrl.pathname.startsWith(r));
 

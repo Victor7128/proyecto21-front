@@ -329,6 +329,9 @@ export default function HuespedesPage() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left px-5 py-3 font-medium text-gray-600">
+                  ID
+                </th>
+                <th className="text-left px-5 py-3 font-medium text-gray-600">
                   Nombre completo
                 </th>
                 <th className="text-left px-5 py-3 font-medium text-gray-600">
@@ -339,6 +342,9 @@ export default function HuespedesPage() {
                 </th>
                 <th className="text-left px-5 py-3 font-medium text-gray-600">
                   Correo
+                </th>
+                <th className="text-left px-5 py-3 font-medium text-gray-600">
+                  Estado
                 </th>
                 <th className="text-left px-5 py-3 font-medium text-gray-600">
                   Registro
@@ -371,6 +377,9 @@ export default function HuespedesPage() {
                     className="border-b border-gray-100 hover:bg-gray-50 transition"
                   >
                     <td className="px-5 py-3.5 font-medium text-gray-800">
+                      {h.id_huesped}
+                    </td>
+                    <td className="px-5 py-3.5 font-medium text-gray-800">
                       {h.nombres} {h.apellidos}
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">
@@ -384,6 +393,15 @@ export default function HuespedesPage() {
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">
                       {h.correo ?? "—"}
+                    </td>
+                    <td className="px-5 py-3.5">
+                     <span
+                      className={`text-xs px-2 py-1 rounded-full ${
+                       h.correo ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                         }`}
+                      >
+                        {h.correo ? "Completo" : "Incompleto"}
+                      </span>
                     </td>
                     <td className="px-5 py-3.5 text-gray-400 text-xs">
                       {new Date(h.fecha_creacion).toLocaleDateString("es-PE")}

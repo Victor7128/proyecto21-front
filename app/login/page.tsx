@@ -1,10 +1,8 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -29,7 +27,11 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      // Hard redirect: garantiza que el browser envíe el cookie recién seteado
+      // al middleware antes de cargar /dashboard.
+      // router.push() hace soft navigation y en algunos casos el middleware
+      // no lee el cookie a tiempo, redirigiendo de vuelta a /login.
+      window.location.href = "/dashboard";
     } catch {
       setError("No se pudo conectar con el servidor");
     } finally {

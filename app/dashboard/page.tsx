@@ -46,7 +46,6 @@ export default function DashboardPage() {
     { label: "Habitaciones", icon: "🛏️", href: "/dashboard/habitaciones", color: "bg-emerald-50 text-emerald-600" },
     { label: "Huéspedes", icon: "👤", href: "/dashboard/huespedes", color: "bg-violet-50 text-violet-600" },
     { label: "Pagos", icon: "💳", href: "/dashboard/pagos", color: "bg-amber-50 text-amber-600" },
-
     { label: "Personal", icon: "🧑‍💼", href: "/dashboard/personal", color: "bg-pink-50 text-pink-600" },
     { label: "Conserjería", icon: "🛎️", href: "/dashboard/conserjeria", color: "bg-indigo-50 text-indigo-600" },
     { label: "Hospedaje", icon: "🏨", href: "/dashboard/hospedaje", color: "bg-teal-50 text-teal-600" },

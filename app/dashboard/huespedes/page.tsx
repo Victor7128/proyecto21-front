@@ -19,6 +19,42 @@ const EMPTY_FORM: HuespedPayload = {
   correo: "",
 };
 
+// ── Reglas de validación por tipo de documento ────────────────────────────────
+const REGLAS_DOCUMENTO: Record<string, { regex: RegExp; mensaje: string }> = {
+  // Coincide con cualquier label que contenga estas palabras clave
+  dni: {
+    regex: /^\d{8}$/,
+    mensaje: "El DNI debe tener exactamente 8 dígitos numéricos.",
+  },
+  pasaporte: {
+    regex: /^[A-Za-z0-9]{6,12}$/,
+    mensaje: "El pasaporte debe tener entre 6 y 12 caracteres alfanuméricos.",
+  },
+  carné: {
+    regex: /^[A-Za-z0-9]{9,12}$/,
+    mensaje: "El carné de extranjería debe tener entre 9 y 12 caracteres.",
+  },
+  extranjería: {
+    regex: /^[A-Za-z0-9]{9,12}$/,
+    mensaje: "El carné de extranjería debe tener entre 9 y 12 caracteres.",
+  },
+  ruc: {
+    regex: /^\d{11}$/,
+    mensaje: "El RUC debe tener exactamente 11 dígitos numéricos.",
+  },
+};
+
+function getReglaDocumento(label: string) {
+  const lower = label.toLowerCase();
+  for (const [key, regla] of Object.entries(REGLAS_DOCUMENTO)) {
+    if (lower.includes(key)) return regla;
+  }
+  // Sin regla específica: solo requiere al menos 4 caracteres
+  return { regex: /^.{4,}$/, mensaje: "El número de documento debe tener al menos 4 caracteres." };
+}
+
+const REGEX_TELEFONO = /^9\d{8}$/;
+
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function Modal({
   title,
@@ -47,6 +83,25 @@ function Modal({
   );
 }
 
+// ── Campo con error ───────────────────────────────────────────────────────────
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      {children}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+}
+
 // ── Formulario ────────────────────────────────────────────────────────────────
 function HuespedForm({
   initial,
@@ -60,8 +115,19 @@ function HuespedForm({
   loading: boolean;
 }) {
   const [form, setForm] = useState<HuespedPayload>(initial);
-  const set = (k: keyof HuespedPayload, v: string | number) =>
+  const [errores, setErrores] = useState<Partial<Record<keyof HuespedPayload, string>>>({});
+
+  const set = (k: keyof HuespedPayload, v: string | number) => {
     setForm((f) => ({ ...f, [k]: v }));
+    // Limpiar error al editar el campo
+    setErrores((e) => ({ ...e, [k]: undefined }));
+  };
+
+  // Reinicia el form cuando cambia el registro
+  useEffect(() => {
+    setForm(initial);
+    setErrores({});
+  }, [initial]);
 
   // Si los tipos cargaron y no hay tipo seleccionado, selecciona el primero
   useEffect(() => {
@@ -70,49 +136,86 @@ function HuespedForm({
     }
   }, [tiposDocumento]);
 
+  function validar(): boolean {
+    const nuevosErrores: Partial<Record<keyof HuespedPayload, string>> = {};
+
+    if (!form.nombres.trim()) {
+      nuevosErrores.nombres = "El nombre es obligatorio.";
+    }
+    if (!form.apellidos.trim()) {
+      nuevosErrores.apellidos = "Los apellidos son obligatorios.";
+    }
+
+    // Validar número de documento según tipo
+    const tipoLabel =
+      tiposDocumento.find((t) => t.id === form.tipo_documento)?.label ?? "";
+    const regla = getReglaDocumento(tipoLabel);
+    if (!regla.regex.test(form.num_documento)) {
+      nuevosErrores.num_documento = regla.mensaje;
+    }
+
+    // Validar teléfono (solo si se ingresó algo)
+    if (form.telefono && !REGEX_TELEFONO.test(form.telefono)) {
+      nuevosErrores.telefono =
+        "El teléfono debe ser un número peruano válido (9 dígitos, empezar con 9).";
+    }
+
+    setErrores(nuevosErrores);
+    return Object.keys(nuevosErrores).length === 0;
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (validar()) onSubmit(form);
+  }
+
+  const inputClass = (campo: keyof HuespedPayload) =>
+    `w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+      errores[campo] ? "border-red-400 bg-red-50" : "border-gray-300"
+    }`;
+
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit(form);
-      }}
-      className="space-y-4"
-    >
+    <form onSubmit={handleSubmit} className="space-y-4 text-black">
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Nombres *
-          </label>
+        <Field label="Nombres *" error={errores.nombres}>
           <input
-            required
             value={form.nombres}
             onChange={(e) => set("nombres", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={inputClass("nombres")}
           />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Apellidos *
-          </label>
+        </Field>
+        <Field label="Apellidos *" error={errores.apellidos}>
           <input
-            required
             value={form.apellidos}
             onChange={(e) => set("apellidos", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={inputClass("apellidos")}
           />
-        </div>
+        </Field>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Tipo documento *
-          </label>
+        <Field label="Tipo documento *">
           <select
             value={form.tipo_documento}
-            onChange={(e) => set("tipo_documento", Number(e.target.value))}
+            onChange={(e) => {
+              const nuevoId = Number(e.target.value);
+              set("tipo_documento", nuevoId);
+
+              // Validar de inmediato el número actual contra el nuevo tipo
+              if (form.num_documento) {
+                const nuevoLabel =
+                  tiposDocumento.find((t) => t.id === nuevoId)?.label ?? "";
+                const regla = getReglaDocumento(nuevoLabel);
+                if (!regla.regex.test(form.num_documento)) {
+                  setErrores((er) => ({
+                    ...er,
+                    num_documento: `El número "${form.num_documento}" no es válido para ${nuevoLabel}. ${regla.mensaje}`,
+                  }));
+                } else {
+                  setErrores((er) => ({ ...er, num_documento: undefined }));
+                }
+              }
+            }}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
                        focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
@@ -122,45 +225,41 @@ function HuespedForm({
               </option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Nº documento *
-          </label>
+        </Field>
+        <Field label="Nº documento *" error={errores.num_documento}>
           <input
-            required
             value={form.num_documento}
             onChange={(e) => set("num_documento", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={inputClass("num_documento")}
+            placeholder={
+              tiposDocumento.find((t) => t.id === form.tipo_documento)?.label
+                ?.toLowerCase()
+                .includes("dni")
+                ? "12345678"
+                : ""
+            }
           />
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          Teléfono
-        </label>
+      <Field label="Teléfono" error={errores.telefono}>
         <input
           value={form.telefono ?? ""}
           onChange={(e) => set("telefono", e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={inputClass("telefono")}
+          placeholder="9XXXXXXXX"
+          maxLength={9}
         />
-      </div>
+      </Field>
 
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">
-          Correo
-        </label>
+      <Field label="Correo" error={errores.correo}>
         <input
           type="email"
           value={form.correo ?? ""}
           onChange={(e) => set("correo", e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className={inputClass("correo")}
         />
-      </div>
+      </Field>
 
       <button
         type="submit"
@@ -188,7 +287,6 @@ export default function HuespedesPage() {
   const [editando, setEditando] = useState<Huesped | null>(null);
   const [eliminando, setEliminando] = useState<Huesped | null>(null);
 
-  // Carga tipos de documento desde el catálogo real del backend
   useEffect(() => {
     catalogoService
       .tiposDocumento()
@@ -209,11 +307,8 @@ export default function HuespedesPage() {
     }
   }, []);
 
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
+  useEffect(() => { cargar(); }, [cargar]);
 
-  // Búsqueda con debounce
   useEffect(() => {
     const t = setTimeout(() => cargar(busqueda), 400);
     return () => clearTimeout(t);
@@ -226,7 +321,7 @@ export default function HuespedesPage() {
       setModalCrear(false);
       cargar();
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Error al crear");
+      setError(e instanceof Error ? e.message : "Error al crear");
     } finally {
       setLoadingForm(false);
     }
@@ -240,7 +335,7 @@ export default function HuespedesPage() {
       setEditando(null);
       cargar();
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Error al actualizar");
+      setError(e instanceof Error ? e.message : "Error al actualizar");
     } finally {
       setLoadingForm(false);
     }
@@ -254,14 +349,12 @@ export default function HuespedesPage() {
       setEliminando(null);
       cargar();
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Error al eliminar");
+      setError(e instanceof Error ? e.message : "Error al eliminar");
     } finally {
       setLoadingForm(false);
     }
   }
 
-  // Convierte Huesped → HuespedPayload para precargar el formulario de edición
-  // Usa los tipos cargados desde el backend, no valores hardcodeados
   function huespedToPayload(h: Huesped): HuespedPayload {
     const tipoEncontrado = tiposDocumento.find(
       (t) => t.label.toLowerCase() === h.tipo_documento.toLowerCase()
@@ -312,7 +405,7 @@ export default function HuespedesPage() {
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre..."
             className="w-full max-w-sm border border-gray-300 rounded-lg px-4 py-2 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
           />
         </div>
 
@@ -328,21 +421,11 @@ export default function HuespedesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-5 py-3 font-medium text-gray-600">
-                  Nombre completo
-                </th>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">
-                  Documento
-                </th>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">
-                  Teléfono
-                </th>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">
-                  Correo
-                </th>
-                <th className="text-left px-5 py-3 font-medium text-gray-600">
-                  Registro
-                </th>
+                <th className="text-left px-5 py-3 font-medium text-gray-600">Nombre completo</th>
+                <th className="text-left px-5 py-3 font-medium text-gray-600">Documento</th>
+                <th className="text-left px-5 py-3 font-medium text-gray-600">Teléfono</th>
+                <th className="text-left px-5 py-3 font-medium text-gray-600">Correo</th>
+                <th className="text-left px-5 py-3 font-medium text-gray-600">Registro</th>
                 <th className="px-5 py-3" />
               </tr>
             </thead>
@@ -357,19 +440,13 @@ export default function HuespedesPage() {
                 </tr>
               ) : huespedes.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="text-center py-12 text-gray-400"
-                  >
+                  <td colSpan={6} className="text-center py-12 text-gray-400">
                     No se encontraron huéspedes
                   </td>
                 </tr>
               ) : (
                 huespedes.map((h) => (
-                  <tr
-                    key={h.id_huesped}
-                    className="border-b border-gray-100 hover:bg-gray-50 transition"
-                  >
+                  <tr key={h.id_huesped} className="border-b border-gray-100 hover:bg-gray-50 transition">
                     <td className="px-5 py-3.5 font-medium text-gray-800">
                       {h.nombres} {h.apellidos}
                     </td>
@@ -379,12 +456,8 @@ export default function HuespedesPage() {
                       </span>
                       {h.num_documento}
                     </td>
-                    <td className="px-5 py-3.5 text-gray-600">
-                      {h.telefono ?? "—"}
-                    </td>
-                    <td className="px-5 py-3.5 text-gray-600">
-                      {h.correo ?? "—"}
-                    </td>
+                    <td className="px-5 py-3.5 text-gray-600">{h.telefono ?? "—"}</td>
+                    <td className="px-5 py-3.5 text-gray-600">{h.correo ?? "—"}</td>
                     <td className="px-5 py-3.5 text-gray-400 text-xs">
                       {new Date(h.fecha_creacion).toLocaleDateString("es-PE")}
                     </td>

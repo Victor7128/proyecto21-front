@@ -18,7 +18,9 @@ export async function POST(req: Request) {
     );
   }
 
-  const { access_token } = await backendRes.json();
+  const data = await backendRes.json();
+console.log("LOGIN BACKEND RESPONSE:", data);
+const access_token = data.access_token;
 
   const response = NextResponse.json({ ok: true });
 

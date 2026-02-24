@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { getServerToken, verifyToken } from "@/lib/auth";  // ← usar getServerToken
 
 export async function GET() {
-  // ✔ En route handlers SIEMPRE await
-  const token = (await cookies()).get("token")?.value;
+  const token = await getServerToken();  // ← lee la cookie "auth_token" correctamente
 
   if (!token) {
     return NextResponse.json({ message: "No autenticado" }, { status: 401 });
   }
 
-  // validar firma y expiración
   let payload;
   try {
     payload = await verifyToken(token);
@@ -29,9 +26,7 @@ export async function GET() {
   const backendRes = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL}/personal/${encodeURIComponent(id_personal)}`,
     {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     }
   );
@@ -44,9 +39,9 @@ export async function GET() {
 
   return NextResponse.json({
     id_personal: usuario.id_personal,
-    nombre: usuario.nombre,
-    email: usuario.email,
-    rol: usuario.rol,
-    activo: usuario.activo,
+    nombre:      usuario.nombre,
+    email:       usuario.email,
+    rol:         usuario.rol,
+    activo:      usuario.activo,
   });
 }

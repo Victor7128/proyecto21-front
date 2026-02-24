@@ -1,28 +1,60 @@
-// lib/auth.ts
-import { SignJWT, jwtVerify, type JWTPayload } from "jose";
+import { cookies } from "next/headers";
+import { apiFetch } from "./api";
+import { jwtVerify, type JWTPayload } from "jose";
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? "");
+export const TOKEN_COOKIE = "auth_token";
+export const USER_COOKIE  = "auth_user";
 
-// WARNING: si JWT_SECRET no está definido, jose fallará en runtime.
-// Asegúrate de definir JWT_SECRET en .env.local o en el entorno de producción.
-if (!process.env.JWT_SECRET) {
-  // opcional: un aviso para dev
-  // eslint-disable-next-line no-console
-  console.warn("JWT_SECRET no está definido. Define process.env.JWT_SECRET antes de usar auth.");
+export type PersonalUser = {
+  tipo:        "personal";
+  id_personal: number;
+  id_rol:      number;
+  nombre_rol:  string;
+};
+
+export type HuespedUser = {
+  tipo:       "huesped";
+  id_huesped: number;
+};
+
+export type AuthUser = PersonalUser | HuespedUser;
+
+// ── Server-side helpers (App Router / Server Components) ──────────────────────
+
+export async function getServerToken(): Promise<string | null> {
+  const cookieStore = await cookies();
+  return cookieStore.get(TOKEN_COOKIE)?.value ?? null;
 }
 
-/**
- * payload: usa Record<string, unknown> para que TypeScript acepte la forma dinámica.
- * casteamos a JWTPayload para cumplir la firma de SignJWT.
- */
-export async function createToken(payload: Record<string, unknown>) {
-  return await new SignJWT(payload as JWTPayload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("2h")
-    .sign(secret);
+export async function getServerUser(): Promise<AuthUser | null> {
+  const cookieStore = await cookies();
+  const raw = cookieStore.get(USER_COOKIE)?.value;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+// ── Login / Logout (llamados desde API routes) ────────────────────────────────
+
+export async function loginPersonal(email: string, password: string) {
+  return apiFetch<{ access_token: string; token_type: string; tipo: string }>(
+    "/auth/login",
+    { method: "POST", body: { email, password } }
+  );
+}
+
+export async function loginHuesped(email_login: string, password: string) {
+  return apiFetch<{ access_token: string; token_type: string; tipo: string }>(
+    "/auth/login/huesped",
+    { method: "POST", body: { email_login, password } }
+  );
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload> {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
   const { payload } = await jwtVerify(token, secret);
-  return payload as JWTPayload;
+  return payload;
 }

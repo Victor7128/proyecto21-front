@@ -1,38 +1,35 @@
-// lib/api.ts
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-type FetchOptions = RequestInit & {
+type RequestOptions = {
+  method?: string;
+  body?: unknown;
   token?: string;
 };
 
-export class ApiError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
-
 export async function apiFetch<T>(
   endpoint: string,
-  options: FetchOptions = {}
+  options: RequestOptions = {}
 ): Promise<T> {
-  const { token, ...fetchOptions } = options;
+  const { method = "GET", body, token } = options;
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...fetchOptions.headers,
   };
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    ...fetchOptions,
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_URL}${endpoint}`, {
+    method,
     headers,
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: "Error desconocido" }));
-    throw new ApiError(res.status, error.detail ?? "Error en la solicitud");
+    throw new Error(error.detail || `Error ${res.status}`);
   }
 
-  return res.json() as Promise<T>;
+  return res.json();
 }

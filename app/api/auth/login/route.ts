@@ -61,23 +61,4 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : "Error al iniciar sesión.";
     return NextResponse.json({ error: message }, { status: 401 });
   }
-<<<<<<< HEAD
-
-  const data = await backendRes.json();
-console.log("LOGIN BACKEND RESPONSE:", data);
-const access_token = data.access_token;
-
-  const response = NextResponse.json({ ok: true });
-
-  response.cookies.set("token", access_token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 8, // 8 horas
-  });
-
-  return response;
-=======
->>>>>>> origin/master
 }

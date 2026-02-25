@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loginPersonal, loginHuesped, TOKEN_COOKIE, USER_COOKIE } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,18 +15,25 @@ export async function POST(req: NextRequest) {
     let tokenData: { access_token: string; tipo: string };
     let userPayload: Record<string, unknown>;
 
+    // Decodificar el JWT (sin verificar firma — solo para leer el payload)
+    function decodeJwt(token: string) {
+      const payloadBase64 = token.split(".")[1];
+      return JSON.parse(Buffer.from(payloadBase64, "base64url").toString("utf-8"));
+    }
+
     if (tipo === "huesped") {
       tokenData = await loginHuesped(email, password);
-      userPayload = { tipo: "huesped" };
+
+      // ← CORRECCIÓN: también hay que decodificar el JWT del huésped
+      const decoded = decodeJwt(tokenData.access_token);
+      userPayload = {
+        tipo:       "huesped",
+        id_huesped: decoded.id_huesped,   // el backend lo incluye en el JWT
+      };
     } else {
       // Personal (default)
       tokenData = await loginPersonal(email, password);
-
-      // Decodificar el JWT para obtener id_personal e id_rol
-      const payloadBase64 = tokenData.access_token.split(".")[1];
-      const decoded = JSON.parse(
-        Buffer.from(payloadBase64, "base64url").toString("utf-8")
-      );
+      const decoded = decodeJwt(tokenData.access_token);
       userPayload = {
         tipo:        "personal",
         id_personal: decoded.id_personal,
@@ -38,16 +44,16 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({ ok: true, tipo: tokenData.tipo });
 
-    // Cookie del token (httpOnly — JS del cliente no puede leerla)
+    // Cookie del token (httpOnly — JS del cliente NO puede leerla)
     response.cookies.set(TOKEN_COOKIE, tokenData.access_token, {
       httpOnly: true,
       secure:   process.env.NODE_ENV === "production",
       sameSite: "lax",
       path:     "/",
-      maxAge:   60 * 60 * 8, // 8 horas
+      maxAge:   60 * 60 * 8,
     });
 
-    // Cookie del usuario (no httpOnly — el cliente puede leerla para mostrar info)
+    // Cookie del usuario (NO httpOnly — el cliente sí puede leerla)
     response.cookies.set(USER_COOKIE, JSON.stringify(userPayload), {
       httpOnly: false,
       secure:   process.env.NODE_ENV === "production",

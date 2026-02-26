@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// ── Tipos ────────────────────────────────────────────────────────────────────
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 interface Usuario {
   id_personal: number;
   nombre: string;
@@ -14,32 +14,32 @@ interface Usuario {
 }
 
 type Reserva = {
-  id_reserva: number;
-  id_huesped: number;
-  nombres?: string;
-  apellidos?: string;
+  id_reserva:    number;
+  id_huesped:    number;
+  nombres?:      string;
+  apellidos?:    string;
   id_habitacion: number;
-  habitacion?: string;
+  habitacion?:   string;
   fecha_entrada: string;
-  fecha_salida: string;
-  num_personas: number;
-  monto_total: number;
-  estado: number | string;
+  fecha_salida:  string;
+  num_personas:  number;
+  monto_total:   number;
+  estado:        number | string;
 };
 
 type Encuesta = {
-  id_encuesta: number;
-  id_orden_hospedaje: number;
-  nombres?: string;
-  apellidos?: string;
-  recomendacion: boolean;
-  lugar_origen?: string;
-  motivo_viaje?: string;
-  calificacion_limpieza: number;
-  calificacion_servicio: number;
+  id_encuesta:            number;
+  id_orden_hospedaje:     number;
+  nombres?:               string;
+  apellidos?:             string;
+  recomendacion:          boolean;
+  lugar_origen?:          string;
+  motivo_viaje?:          string;
+  calificacion_limpieza:  number;
+  calificacion_servicio:  number;
   calificacion_ubicacion: number;
-  calificacion_precio: number;
-  comentarios?: string;
+  calificacion_precio:    number;
+  comentarios?:           string;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ function avgCalif(e: Encuesta) {
 }
 
 function StarBar({ val, max = 5 }: { val: number; max?: number }) {
-  const pct = Math.min((val / max) * 100, 100);
+  const pct   = Math.min((val / max) * 100, 100);
   const color = val >= 4.5 ? "#5a9e6f" : val >= 3.5 ? "#7aab8a" : val >= 2.5 ? "#c9a96e" : val >= 1.5 ? "#e8832a" : "#d4451a";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: ".5rem", flex: 1 }}>
@@ -78,15 +78,21 @@ function StarBar({ val, max = 5 }: { val: number; max?: number }) {
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
-  const [usuario,   setUsuario]   = useState<Usuario | null>(null);
-  const [loading,   setLoading]   = useState(true);
-  const [activeCard, setActiveCard] = useState<string | null>(null);
+  const [usuario,       setUsuario]       = useState<Usuario | null>(null);
+  const [loading,       setLoading]       = useState(true);
+  const [sideCollapsed, setSideCollapsed] = useState(false);
 
   const [reservas,  setReservas]  = useState<Reserva[]>([]);
   const [encuestas, setEncuestas] = useState<Encuesta[]>([]);
   const [loadingR,  setLoadingR]  = useState(true);
   const [loadingE,  setLoadingE]  = useState(true);
   const [encTab,    setEncTab]    = useState<"lista" | "resumen">("lista");
+
+  // Calendario
+  const [calReservas, setCalReservas] = useState<Reserva[]>([]);
+  const [calMes,      setCalMes]      = useState<Date>(() => { const d = new Date(); d.setDate(1); return d; });
+  const [calHab,      setCalHab]      = useState<string>("todas");
+  const [calTooltip,  setCalTooltip]  = useState<{ day: Date; reservas: Reserva[] } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -96,7 +102,6 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  // Reservas pendientes (estado=1 → pendiente de confirmación)
   useEffect(() => {
     if (!usuario) return;
     dashFetch<Reserva[]>("/reservas?estado=1")
@@ -105,7 +110,6 @@ export default function DashboardPage() {
       .finally(() => setLoadingR(false));
   }, [usuario]);
 
-  // Encuestas más recientes (últimas 30)
   useEffect(() => {
     if (!usuario) return;
     dashFetch<Encuesta[]>("/encuestas")
@@ -114,51 +118,98 @@ export default function DashboardPage() {
       .finally(() => setLoadingE(false));
   }, [usuario]);
 
+  useEffect(() => {
+    if (!usuario) return;
+    dashFetch<Reserva[]>("/reservas")
+      .then(d => setCalReservas(Array.isArray(d) ? d : []))
+      .catch(() => setCalReservas([]));
+  }, [usuario]);
+
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   }
 
-  // Promedios para la vista resumen
   const totales = encuestas.length > 0 ? {
-    limpieza:     encuestas.reduce((s, e) => s + e.calificacion_limpieza,  0) / encuestas.length,
-    servicio:     encuestas.reduce((s, e) => s + e.calificacion_servicio,  0) / encuestas.length,
-    ubicacion:    encuestas.reduce((s, e) => s + e.calificacion_ubicacion, 0) / encuestas.length,
-    precio:       encuestas.reduce((s, e) => s + e.calificacion_precio,    0) / encuestas.length,
-    recomiendan:  encuestas.filter(e => e.recomendacion).length,
-    general:      encuestas.reduce((s, e) => s + avgCalif(e), 0) / encuestas.length,
+    limpieza:    encuestas.reduce((s, e) => s + e.calificacion_limpieza,  0) / encuestas.length,
+    servicio:    encuestas.reduce((s, e) => s + e.calificacion_servicio,  0) / encuestas.length,
+    ubicacion:   encuestas.reduce((s, e) => s + e.calificacion_ubicacion, 0) / encuestas.length,
+    precio:      encuestas.reduce((s, e) => s + e.calificacion_precio,    0) / encuestas.length,
+    recomiendan: encuestas.filter(e => e.recomendacion).length,
+    general:     encuestas.reduce((s, e) => s + avgCalif(e), 0) / encuestas.length,
   } : null;
 
-  // Roles reconocidos (deben coincidir con el valor exacto que devuelve usuario.rol)
-  // administrador ve todas las cards (sin restricción)
-  // null en roles = solo administrador
-  const cards = [
-    { label: "Reservas",     icon: "🗓️", href: "/dashboard/reservas",     accent: "#e8832a", grad: "linear-gradient(135deg,#e8832a,#d4451a)", desc: "Gestiona las reservas activas",   roles: ["administrador", "recepcionista", "mantenimiento"] },
-    { label: "Habitaciones", icon: "🛏️", href: "/dashboard/habitaciones", accent: "#2a7ae8", grad: "linear-gradient(135deg,#2a7ae8,#1a4fd4)", desc: "Estado y disponibilidad",         roles: ["administrador"] },
-    { label: "Huéspedes",    icon: "👤", href: "/dashboard/huespedes",     accent: "#8b2ae8", grad: "linear-gradient(135deg,#8b2ae8,#5a1ad4)", desc: "Registro de huéspedes",           roles: ["administrador", "recepcionista"] },
-    { label: "Pagos",        icon: "💳", href: "/dashboard/pagos",         accent: "#c9a96e", grad: "linear-gradient(135deg,#c9a96e,#a07840)", desc: "Control de facturación",          roles: ["administrador", "recepcionista", "conserjeria"] },
-    { label: "Personal",     icon: "🧑‍💼", href: "/dashboard/personal",     accent: "#d4451a", grad: "linear-gradient(135deg,#d4451a,#a02810)", desc: "Administración del equipo",       roles: ["administrador"] },
-    { label: "Conserjería",  icon: "🛎️", href: "/dashboard/conserjeria",   accent: "#2ab5a0", grad: "linear-gradient(135deg,#2ab5a0,#1a8070)", desc: "Solicitudes y servicios",         roles: ["administrador", "recepcionista", "conserjeria"] },
-    { label: "Hospedaje",    icon: "🏨", href: "/dashboard/hospedaje",     accent: "#1a7ad4", grad: "linear-gradient(135deg,#1a7ad4,#0a50a0)", desc: "Control de estadías",             roles: ["administrador", "recepcionista", "mantenimiento"] },
+  const navItems = [
+    { label: "Reservas",     icon: "🗓️", href: "/dashboard/reservas",     roles: ["administrador","recepcionista","mantenimiento"] },
+    { label: "Habitaciones", icon: "🛏️", href: "/dashboard/habitaciones", roles: ["administrador"] },
+    { label: "Huéspedes",    icon: "👤", href: "/dashboard/huespedes",     roles: ["administrador","recepcionista"] },
+    { label: "Pagos",        icon: "💳", href: "/dashboard/pagos",         roles: ["administrador","recepcionista","conserjeria"] },
+    { label: "Personal",     icon: "🧑‍💼", href: "/dashboard/personal",     roles: ["administrador"] },
+    { label: "Conserjería",  icon: "🛎️", href: "/dashboard/conserjeria",   roles: ["administrador","recepcionista","conserjeria"] },
+    { label: "Hospedaje",    icon: "🏨", href: "/dashboard/hospedaje",     roles: ["administrador","recepcionista","mantenimiento"] },
   ];
 
-  // Normalizar el rol a minúsculas y sin tildes para comparación robusta
-  const rolNorm = (usuario?.rol ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const visibleCards = cards.filter(c => c.roles.includes(rolNorm));
+  const rolNorm     = (usuario?.rol ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const visibleNavs = navItems.filter(n => n.roles.includes(rolNorm));
+
+  // ── Calendario helpers ─────────────────────────────────────────────────────
+  const MESES       = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const DIAS_SEMANA = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+  const BAND_COLORS: Record<string, { bg: string; text: string }> = {
+    "Confirmada": { bg: "rgba(90,158,111,.8)",   text: "#fff" },
+    "Pendiente":  { bg: "rgba(232,131,42,.8)",   text: "#fff" },
+    "Completada": { bg: "rgba(100,140,200,.7)",  text: "#fff" },
+    "Cancelada":  { bg: "rgba(180,170,160,.35)", text: "#7a6e5f" },
+  };
+
+  function toMid(iso: string) { return new Date(iso.includes("T") ? iso : iso + "T12:00:00"); }
+  function sameDay(a: Date, b: Date) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+  function dayKey(d: Date) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+
+  const habitaciones      = Array.from(new Set(calReservas.map(r => r.habitacion).filter(Boolean))).sort() as string[];
+  const reservasFiltradas = calHab === "todas" ? calReservas : calReservas.filter(r => r.habitacion === calHab);
+
+  const año         = calMes.getFullYear();
+  const mes         = calMes.getMonth();
+  const primero     = new Date(año, mes, 1);
+  const ultimo      = new Date(año, mes + 1, 0);
+  const offsetLunes = (primero.getDay() + 6) % 7;
+  const filas       = Math.ceil((offsetLunes + ultimo.getDate()) / 7);
+  const hoy         = new Date();
+
+  const bandCache: Record<string, { reserva: Reserva; isStart: boolean; isEnd: boolean }[]> = {};
+  reservasFiltradas.forEach(r => {
+    if (!r.fecha_entrada || !r.fecha_salida) return;
+    const entrada = toMid(r.fecha_entrada);
+    const salida  = toMid(r.fecha_salida);
+    const cur = new Date(entrada);
+    while (cur < salida) {
+      const k = dayKey(cur);
+      if (!bandCache[k]) bandCache[k] = [];
+      bandCache[k].push({ reserva: r, isStart: sameDay(cur, entrada), isEnd: sameDay(new Date(cur.getTime() + 86400000), salida) });
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
+  const reservasMes     = reservasFiltradas.filter(r => { const e = toMid(r.fecha_entrada); const s = toMid(r.fecha_salida); return e <= new Date(año, mes + 1, 0) && s >= new Date(año, mes, 1); });
+  const statConfirmadas = reservasMes.filter(r => r.estado === "Confirmada").length;
+  const statPendientes  = reservasMes.filter(r => r.estado === "Pendiente").length;
+  const statCompletadas = reservasMes.filter(r => r.estado === "Completada").length;
+  const statCanceladas  = reservasMes.filter(r => r.estado === "Cancelada").length;
 
   if (loading) return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300&family=Montserrat:wght@300;400;500;600;700&display=swap');
-        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-        .loading-root { min-height:100vh; display:flex; align-items:center; justify-content:center; background:#f0e9df; font-family:'Montserrat',sans-serif; }
-        .loading-spinner { width:40px; height:40px; border:3px solid rgba(201,169,110,0.25); border-top-color:#e8832a; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 1rem; }
-        .loading-text { font-size:0.65rem; letter-spacing:0.25em; text-transform:uppercase; color:#7a6e5f; text-align:center; }
-        @keyframes spin { to { transform:rotate(360deg); } }
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        .lr{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f0e9df;font-family:'Montserrat',sans-serif}
+        .ls{width:40px;height:40px;border:3px solid rgba(201,169,110,.25);border-top-color:#e8832a;border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 1rem}
+        .lt{font-size:.65rem;letter-spacing:.25em;text-transform:uppercase;color:#7a6e5f;text-align:center}
+        @keyframes sp{to{transform:rotate(360deg)}}
       `}</style>
-      <div className="loading-root">
-        <div><div className="loading-spinner" /><p className="loading-text">Cargando...</p></div>
-      </div>
+      <div className="lr"><div><div className="ls"/><p className="lt">Cargando...</p></div></div>
     </>
   );
 
@@ -166,509 +217,591 @@ export default function DashboardPage() {
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Montserrat:wght@300;400;500;600;700&display=swap');
-        *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-        .dash-root { min-height:100vh; background:#f0e9df; font-family:'Montserrat',sans-serif; }
+        /* ══ SHELL ══ */
+        .shell{display:flex;min-height:100vh;background:#eee8df;font-family:'Montserrat',sans-serif}
 
-        /* ── Navbar ── */
-        .dash-nav { background:#1a1a14; border-bottom:1px solid rgba(201,169,110,0.25); position:sticky; top:0; z-index:50; }
-        .dash-nav-inner { max-width:1280px; margin:0 auto; padding:0 2rem; height:68px; display:flex; align-items:center; justify-content:space-between; }
-        .nav-logo { display:flex; align-items:center; gap:0.75rem; text-decoration:none; }
-        .nav-logo-icon { width:38px; height:38px; background:linear-gradient(135deg,#e8832a,#d4451a); border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 10px rgba(232,131,42,0.4); flex-shrink:0; }
-        .nav-logo-icon svg { width:18px; height:18px; fill:#fff; }
-        .nav-logo-text { font-family:'Cormorant Garamond',serif; font-size:1.2rem; font-weight:600; color:#f5efe6; letter-spacing:0.04em; }
-        .nav-logo-sub { font-size:0.55rem; letter-spacing:0.2em; text-transform:uppercase; color:#c9a96e; font-weight:500; line-height:1; }
-        .nav-right { display:flex; align-items:center; gap:1.25rem; }
-        .nav-user-info { text-align:right; }
-        .nav-user-name { font-size:0.82rem; font-weight:600; color:#f5efe6; line-height:1.3; }
-        .nav-user-email { font-size:0.68rem; color:rgba(245,239,230,0.5); }
-        .nav-avatar { width:38px; height:38px; border-radius:50%; background:linear-gradient(135deg,#e8832a,#d4451a); display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700; color:#fff; border:2px solid rgba(201,169,110,0.4); }
-        .nav-logout { display:flex; align-items:center; gap:0.5rem; padding:0.55rem 1.1rem; background:transparent; color:rgba(245,239,230,0.7); border:1px solid rgba(201,169,110,0.3); border-radius:50px; font-family:'Montserrat',sans-serif; font-size:0.68rem; letter-spacing:0.12em; text-transform:uppercase; font-weight:600; cursor:pointer; transition:all 0.2s; }
-        .nav-logout:hover { background:rgba(212,69,26,0.15); border-color:#d4451a; color:#f5c4b0; }
-        .nav-logout svg { width:14px; height:14px; stroke:currentColor; }
+        /* ══ SIDEBAR ══ */
+        .sidebar{
+          width:${sideCollapsed ? "68px" : "230px"};
+          min-height:100vh;flex-shrink:0;
+          background:#1c1c14;
+          border-right:1px solid rgba(201,169,110,.14);
+          display:flex;flex-direction:column;
+          position:sticky;top:0;height:100vh;
+          transition:width .28s cubic-bezier(.22,1,.36,1);
+          overflow:hidden;z-index:40;
+        }
 
-        /* ── Main ── */
-        .dash-main { max-width:1280px; margin:0 auto; padding:3rem 2rem 5rem; }
+        .sb-top{padding:1.1rem .85rem .85rem;border-bottom:1px solid rgba(201,169,110,.1)}
+        .sb-logo-row{display:flex;align-items:center;gap:.7rem;margin-bottom:.9rem;overflow:hidden;white-space:nowrap}
+        .sb-logo-icon{width:34px;height:34px;flex-shrink:0;background:linear-gradient(135deg,#e8832a,#d4451a);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(232,131,42,.4)}
+        .sb-logo-icon svg{width:15px;height:15px;fill:#fff}
+        .sb-logo-txt{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:#f5efe6;letter-spacing:.03em;line-height:1.1}
+        .sb-logo-sub{font-size:.46rem;letter-spacing:.18em;text-transform:uppercase;color:#c9a96e;font-weight:500}
 
-        .ornament { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; }
-        .ornament-line { flex:1; height:1px; background:#c9a96e; opacity:0.35; }
-        .ornament-diamond { width:7px; height:7px; border:1px solid #c9a96e; transform:rotate(45deg); opacity:0.7; }
+        .sb-user-row{display:flex;align-items:center;gap:.65rem;overflow:hidden;white-space:nowrap}
+        .sb-avatar{width:30px;height:30px;flex-shrink:0;border-radius:50%;background:linear-gradient(135deg,#e8832a,#d4451a);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;color:#fff;border:1.5px solid rgba(201,169,110,.3)}
+        .sb-user-name{font-size:.7rem;font-weight:600;color:#f5efe6;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+        .sb-user-rol{font-size:.54rem;color:rgba(201,169,110,.65);letter-spacing:.08em;text-transform:uppercase}
 
-        .dash-header { margin-bottom:3rem; }
-        .dash-welcome { font-family:'Cormorant Garamond',serif; font-size:2.2rem; font-weight:300; color:#1a1a14; line-height:1.2; margin-bottom:0.4rem; }
-        .dash-welcome em { font-style:italic; color:#e8832a; }
-        .dash-subtitle { font-size:0.72rem; letter-spacing:0.18em; text-transform:uppercase; color:#7a6e5f; }
+        /* Nav */
+        .sb-mid{flex:1;padding:.65rem .55rem;display:flex;flex-direction:column;gap:2px;overflow-y:auto;overflow-x:hidden}
+        .sb-mid::-webkit-scrollbar{width:0}
+        .sb-section-lbl{font-size:.47rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:rgba(201,169,110,.3);padding:.5rem .5rem .2rem;white-space:nowrap;overflow:hidden}
+        .sb-item{
+          display:flex;align-items:center;gap:.7rem;
+          padding:.58rem .6rem;border-radius:10px;
+          text-decoration:none;
+          color:rgba(245,239,230,.5);
+          font-size:.7rem;font-weight:600;letter-spacing:.01em;
+          white-space:nowrap;overflow:hidden;
+          transition:background .18s,color .18s;
+          position:relative;
+        }
+        .sb-item:hover{background:rgba(201,169,110,.1);color:rgba(245,239,230,.88)}
+        .sb-item-icon{font-size:1rem;flex-shrink:0;width:20px;text-align:center}
+        .sb-item-txt{flex:1;overflow:hidden;text-overflow:ellipsis}
+        .sb-item-arr{font-size:.65rem;opacity:0;flex-shrink:0;transition:opacity .18s,transform .18s}
+        .sb-item:hover .sb-item-arr{opacity:.45;transform:translateX(2px)}
 
-        /* ── Grid nav cards ── */
-        .dash-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:1.25rem; }
-        .dash-card-wrap:nth-child(1) { grid-column:span 7; }
-        .dash-card-wrap:nth-child(2) { grid-column:span 5; }
-        .dash-card-wrap:nth-child(3) { grid-column:span 4; }
-        .dash-card-wrap:nth-child(4) { grid-column:span 4; }
-        .dash-card-wrap:nth-child(5) { grid-column:span 4; }
-        .dash-card-wrap:nth-child(6) { grid-column:span 5; }
-        .dash-card-wrap:nth-child(7) { grid-column:span 7; }
-        @media (max-width:900px) { .dash-card-wrap:nth-child(n) { grid-column:span 6; } }
-        @media (max-width:580px) { .dash-card-wrap:nth-child(n) { grid-column:span 12; } }
+        /* Toggle & Logout */
+        .sb-bot{padding:.65rem .55rem 1rem;border-top:1px solid rgba(201,169,110,.1);display:flex;flex-direction:column;gap:.35rem}
+        .sb-toggle{display:flex;align-items:center;gap:.7rem;width:100%;padding:.5rem .6rem;border-radius:10px;border:none;background:transparent;cursor:pointer;color:rgba(201,169,110,.4);font-family:'Montserrat',sans-serif;font-size:.68rem;font-weight:600;white-space:nowrap;overflow:hidden;transition:background .18s,color .18s}
+        .sb-toggle:hover{background:rgba(201,169,110,.08);color:rgba(201,169,110,.7)}
+        .sb-toggle svg{width:14px;height:14px;flex-shrink:0;transition:transform .28s}
+        .sb-logout{display:flex;align-items:center;gap:.7rem;width:100%;padding:.5rem .6rem;border-radius:10px;border:none;background:transparent;cursor:pointer;color:rgba(245,239,230,.35);font-family:'Montserrat',sans-serif;font-size:.7rem;font-weight:600;white-space:nowrap;overflow:hidden;transition:background .18s,color .18s}
+        .sb-logout:hover{background:rgba(212,69,26,.1);color:#f5c4b0}
+        .sb-logout svg{width:14px;height:14px;stroke:currentColor;flex-shrink:0}
 
-        .dash-card { display:flex; flex-direction:column; justify-content:space-between; padding:2rem 1.75rem; min-height:170px; background:#fff; border:1px solid rgba(201,169,110,0.15); border-radius:24px; text-decoration:none; position:relative; overflow:hidden; cursor:pointer; animation:cardIn 0.55s cubic-bezier(0.22,1,0.36,1) both; transition:transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s cubic-bezier(0.22,1,0.36,1), background 0.3s; will-change:transform; }
-        .dash-card-wrap:nth-child(1) .dash-card { animation-delay:0.05s; }
-        .dash-card-wrap:nth-child(2) .dash-card { animation-delay:0.1s; }
-        .dash-card-wrap:nth-child(3) .dash-card { animation-delay:0.15s; }
-        .dash-card-wrap:nth-child(4) .dash-card { animation-delay:0.2s; }
-        .dash-card-wrap:nth-child(5) .dash-card { animation-delay:0.25s; }
-        .dash-card-wrap:nth-child(6) .dash-card { animation-delay:0.3s; }
-        .dash-card-wrap:nth-child(7) .dash-card { animation-delay:0.35s; }
-        @keyframes cardIn { from{opacity:0;transform:translateY(28px) scale(0.96)} to{opacity:1;transform:translateY(0) scale(1)} }
-        .dash-card::before { content:''; position:absolute; bottom:-50px; right:-50px; width:160px; height:160px; border-radius:50%; background:var(--grad); opacity:0.07; transition:opacity 0.35s, transform 0.45s cubic-bezier(0.22,1,0.36,1); }
-        .dash-card::after  { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--grad); opacity:0; border-radius:24px 24px 0 0; transition:opacity 0.25s; }
-        .dash-card:hover { transform:translateY(-7px) scale(1.012); box-shadow:0 24px 56px rgba(26,26,20,0.14),0 8px 18px rgba(26,26,20,0.08),0 0 0 1.5px var(--accent); background:#fffdf9; }
-        .dash-card:hover::before { opacity:0.15; transform:scale(1.35) rotate(10deg); }
-        .dash-card:hover::after  { opacity:1; }
-        .dash-card:hover .card-icon-wrap { transform:rotate(-8deg) scale(1.18); box-shadow:0 8px 20px var(--accent-shadow); }
-        .dash-card:hover .card-arrow { transform:translate(4px,-4px); opacity:1; }
-        .dash-card:hover .card-label { color:var(--accent); }
-        .dash-card:hover .card-cta   { opacity:1; transform:translateY(0); }
-        .dash-card:active { transform:translateY(-2px) scale(0.975); box-shadow:0 6px 18px rgba(26,26,20,0.1); transition:transform 0.1s,box-shadow 0.1s; }
-        .card-pop { animation:popEffect 0.4s cubic-bezier(0.22,1,0.36,1) !important; }
-        @keyframes popEffect { 0%{transform:scale(1)} 35%{transform:scale(0.95) translateY(3px)} 65%{transform:scale(1.04) translateY(-5px)} 100%{transform:scale(1) translateY(-7px)} }
-        .card-top { display:flex; align-items:flex-start; justify-content:space-between; }
-        .card-icon-wrap { width:54px; height:54px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; background:var(--accent-bg); transition:transform 0.35s cubic-bezier(0.22,1,0.36,1), box-shadow 0.35s; flex-shrink:0; }
-        .card-arrow { font-size:1rem; color:var(--accent); opacity:0; transition:transform 0.25s,opacity 0.25s; align-self:flex-start; margin-top:2px; }
-        .card-bottom { margin-top:1.25rem; }
-        .card-label { font-size:1rem; font-weight:700; color:#1a1a14; letter-spacing:0.01em; transition:color 0.2s; margin-bottom:0.3rem; }
-        .card-desc { font-size:0.7rem; color:#b8a898; letter-spacing:0.03em; line-height:1.5; }
-        .card-cta { display:inline-flex; align-items:center; gap:0.4rem; margin-top:0.9rem; font-size:0.62rem; letter-spacing:0.18em; text-transform:uppercase; font-weight:700; color:var(--accent); opacity:0; transition:opacity 0.25s,transform 0.25s; transform:translateY(6px); }
+        /* ══ BODY ══ */
+        .dash-body{flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh}
 
-        /* ═══════════════════════════════════
-           SEPARADOR DE SECCIÓN
-        ═══════════════════════════════════ */
-        .section-sep { display:flex; align-items:center; gap:1rem; margin:2.75rem 0 1.75rem; }
-        .section-sep-line { flex:1; height:1px; background:rgba(201,169,110,.3); }
-        .section-sep-title { font-family:'Cormorant Garamond',serif; font-size:1.05rem; font-weight:600; color:#7a6e5f; letter-spacing:.08em; white-space:nowrap; }
-        .section-sep-diamond { width:6px; height:6px; border:1px solid rgba(201,169,110,.5); transform:rotate(45deg); flex-shrink:0; }
+        /* Topbar */
+        .topbar{height:58px;background:#fff;border-bottom:1px solid rgba(201,169,110,.15);padding:0 1.75rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:30;flex-shrink:0}
+        .tb-title{font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;color:#1a1a14;line-height:1.1}
+        .tb-title em{font-style:italic;color:#e8832a}
+        .tb-sub{font-size:.58rem;letter-spacing:.16em;text-transform:uppercase;color:#b8a898;margin-top:1px}
+        .tb-date{font-size:.62rem;color:#b8a898;letter-spacing:.04em}
 
-        /* ═══════════════════════════════════
-           PANELES
-        ═══════════════════════════════════ */
-        .panels-grid { display:grid; grid-template-columns:1.1fr 1fr; gap:1.5rem; }
-        @media (max-width:1000px) { .panels-grid { grid-template-columns:1fr; } }
+        /* Scroll */
+        .dash-scroll{flex:1;padding:1.5rem 1.75rem 3.5rem;display:flex;flex-direction:column;gap:1.25rem;overflow-y:auto}
 
-        .panel { background:#fff; border:1px solid rgba(201,169,110,.18); border-radius:24px; overflow:hidden; animation:cardIn .65s .45s cubic-bezier(.22,1,.36,1) both; }
+        /* ══ KPI STRIP ══ */
+        .kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:.85rem;animation:fadeUp .45s both}
+        @media(max-width:860px){.kpi-strip{grid-template-columns:repeat(2,1fr)}}
+        .kpi-card{background:#fff;border:1px solid rgba(201,169,110,.14);border-radius:16px;padding:1rem 1.1rem;display:flex;align-items:center;gap:.85rem}
+        .kpi-icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+        .kpi-num{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:600;color:#1a1a14;line-height:1}
+        .kpi-lbl{font-size:.56rem;letter-spacing:.1em;text-transform:uppercase;color:#b8a898;margin-top:2px}
 
-        /* Cabecera del panel */
-        .panel-hd { padding:1.1rem 1.5rem; border-bottom:1px solid rgba(201,169,110,.1); display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
-        .panel-hd-left { display:flex; align-items:center; gap:.7rem; }
-        .panel-hd-icon { width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:.95rem; flex-shrink:0; }
-        .panel-hd-icon.rv { background:rgba(232,131,42,.1); }
-        .panel-hd-icon.enc { background:rgba(201,169,110,.1); }
-        .panel-hd-title { font-family:'Cormorant Garamond',serif; font-size:1.05rem; font-weight:600; color:#1a1a14; }
-        .panel-hd-right { display:flex; align-items:center; gap:.6rem; }
-        .panel-badge { font-size:.58rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; padding:.22rem .65rem; border-radius:50px; white-space:nowrap; }
-        .panel-badge.rv  { background:rgba(232,131,42,.1); color:#e8832a; border:1px solid rgba(232,131,42,.18); }
-        .panel-badge.enc { background:rgba(201,169,110,.1); color:#c9a96e; border:1px solid rgba(201,169,110,.22); }
-        .panel-badge.green { background:rgba(90,158,111,.08); color:#5a9e6f; border:1px solid rgba(90,158,111,.2); }
+        /* ══ CALENDAR ══ */
+        .cal-panel{background:#fff;border:1px solid rgba(201,169,110,.16);border-radius:20px;overflow:visible;animation:fadeUp .45s .05s both}
+        .cal-hd{padding:1rem 1.4rem;border-bottom:1px solid rgba(201,169,110,.1);display:flex;align-items:center;justify-content:space-between;gap:.85rem;flex-wrap:wrap}
+        .cal-hd-left{display:flex;align-items:center;gap:.55rem}
+        .cal-hd-icon{width:30px;height:30px;border-radius:8px;background:rgba(232,131,42,.1);display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0}
+        .cal-hd-title{font-family:'Cormorant Garamond',serif;font-size:.95rem;font-weight:600;color:#1a1a14}
+        .cal-hd-right{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}
+        .cal-legend{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+        .cal-leg-item{display:flex;align-items:center;gap:.28rem;font-size:.54rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#7a6e5f}
+        .cal-leg-dot{width:8px;height:8px;border-radius:2.5px;flex-shrink:0}
+        .cal-hab-select{appearance:none;background:rgba(201,169,110,.06);border:1.5px solid rgba(201,169,110,.22);border-radius:50px;padding:.28rem 1.8rem .28rem .75rem;font-family:'Montserrat',sans-serif;font-size:.6rem;font-weight:600;letter-spacing:.07em;color:#4a4035;cursor:pointer;outline:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23c9a96e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .6rem center;transition:border-color .2s}
+        .cal-hab-select:focus{border-color:#c9a96e}
+        .cal-nav{display:flex;align-items:center;gap:.4rem}
+        .cal-nav-btn{width:26px;height:26px;border-radius:50%;border:1.5px solid rgba(201,169,110,.22);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#7a6e5f;transition:all .18s;flex-shrink:0}
+        .cal-nav-btn:hover{background:rgba(201,169,110,.1);border-color:#c9a96e;color:#4a4035}
+        .cal-nav-mes{font-family:'Cormorant Garamond',serif;font-size:1rem;font-weight:600;color:#1a1a14;min-width:148px;text-align:center;letter-spacing:.02em}
 
-        /* Tabs (encuestas) */
-        .enc-tabs { display:flex; gap:.25rem; background:rgba(201,169,110,.06); border-radius:50px; padding:3px; border:1px solid rgba(201,169,110,.15); }
-        .enc-tab { padding:.25rem .75rem; border-radius:50px; border:none; background:none; cursor:pointer; font-family:'Montserrat',sans-serif; font-size:.6rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#b8a898; transition:all .2s; }
-        .enc-tab.active { background:#fff; color:#7a6e5f; box-shadow:0 1px 4px rgba(74,64,53,.1); }
+        .cal-body{padding:.85rem 1.1rem 1.1rem}
+        .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:.35rem}
+        .cal-wd{text-align:center;font-size:.52rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#b8a898;padding:.22rem 0}
+        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
 
-        /* Spinner y vacío */
-        .panel-loading { padding:3.5rem; display:flex; justify-content:center; }
-        .panel-spin { width:20px; height:20px; border-radius:50%; border:2px solid rgba(201,169,110,.2); border-top-color:#e8832a; animation:spin .7s linear infinite; }
-        @keyframes spin { to{transform:rotate(360deg)} }
-        .panel-empty { padding:3rem 2rem; text-align:center; display:flex; flex-direction:column; align-items:center; gap:.65rem; }
-        .panel-empty-icon { width:44px; height:44px; border-radius:50%; background:rgba(201,169,110,.07); border:1px solid rgba(201,169,110,.15); display:flex; align-items:center; justify-content:center; font-size:1.2rem; }
-        .panel-empty-txt { font-size:.7rem; color:#b8a898; }
+        .cal-day{min-height:72px;border-radius:9px;border:1px solid rgba(201,169,110,.1);background:#faf7f3;padding:.32rem .35rem .28rem;display:flex;flex-direction:column;gap:2px;position:relative;cursor:default;transition:border-color .14s,background .14s}
+        .cal-day:hover{border-color:rgba(201,169,110,.32);background:#f6f0e8;z-index:2}
+        .cal-day-empty{min-height:72px;background:transparent;border:none;pointer-events:none}
+        .cal-day-today .cal-day-num-wrap{background:linear-gradient(135deg,#e8832a,#d4451a);border-radius:50%;width:19px;height:19px;display:flex;align-items:center;justify-content:center}
+        .cal-day-today .cal-day-num{color:#fff!important;font-weight:700}
+        .cal-day-num-wrap{display:inline-flex;margin-bottom:1px}
+        .cal-day-num{font-size:.65rem;font-weight:600;color:#4a4035;line-height:1;display:block;padding:2px 3px}
 
-        /* ── TABLA RESERVAS ── */
-        .rv-wrap { overflow-y:auto; max-height:400px; }
-        .rv-wrap::-webkit-scrollbar { width:4px; }
-        .rv-wrap::-webkit-scrollbar-thumb { background:rgba(201,169,110,.2); border-radius:99px; }
-        .rv-table { width:100%; border-collapse:collapse; }
-        .rv-table thead tr { position:sticky; top:0; background:#fff; z-index:1; }
-        .rv-table th { padding:.6rem 1rem; font-size:.56rem; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:#b8a898; text-align:left; border-bottom:1px solid rgba(201,169,110,.12); white-space:nowrap; }
-        .rv-table tbody tr { border-bottom:1px solid rgba(201,169,110,.07); transition:background .15s; }
-        .rv-table tbody tr:last-child { border-bottom:none; }
-        .rv-table tbody tr:hover { background:rgba(201,169,110,.04); }
-        .rv-table td { padding:.8rem 1rem; font-size:.75rem; color:#1a1a14; vertical-align:middle; }
-        .rv-id { font-family:'Cormorant Garamond',serif; font-size:.95rem; font-weight:600; color:#e8832a; }
-        .rv-guest-name { font-weight:600; font-size:.75rem; white-space:nowrap; }
-        .rv-guest-sub { font-size:.6rem; color:#b8a898; margin-top:1px; }
-        .rv-date-in { font-size:.68rem; color:#4a4035; white-space:nowrap; }
-        .rv-date-out { font-size:.62rem; color:#b8a898; margin-top:1px; white-space:nowrap; }
-        .rv-hab { display:inline-block; background:rgba(42,122,232,.07); color:#2a7ae8; border:1px solid rgba(42,122,232,.18); border-radius:6px; padding:.15rem .45rem; font-size:.62rem; font-weight:600; }
-        .rv-monto { font-family:'Cormorant Garamond',serif; font-size:1rem; font-weight:600; color:#1a1a14; white-space:nowrap; }
-        .rv-pend { display:inline-flex; align-items:center; gap:.3rem; background:rgba(232,131,42,.08); color:#e8832a; border:1px solid rgba(232,131,42,.18); border-radius:50px; padding:.18rem .6rem; font-size:.57rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; white-space:nowrap; }
-        .rv-pend::before { content:''; width:5px; height:5px; border-radius:50%; background:#e8832a; animation:pulse 1.5s ease infinite; }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-        .rv-btn-ver { background:rgba(201,169,110,.1); color:#7a6e5f; border:1px solid rgba(201,169,110,.25); border-radius:8px; padding:.28rem .65rem; font-size:.59rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; cursor:pointer; transition:all .2s; font-family:'Montserrat',sans-serif; white-space:nowrap; }
-        .rv-btn-ver:hover { background:rgba(201,169,110,.18); color:#4a4035; }
-        .rv-footer { padding:.8rem 1.25rem; border-top:1px solid rgba(201,169,110,.1); display:flex; justify-content:flex-end; }
-        .rv-link-all { font-size:.61rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#e8832a; text-decoration:none; display:inline-flex; align-items:center; gap:.3rem; transition:gap .2s; }
-        .rv-link-all:hover { gap:.55rem; }
+        .cal-bands{display:flex;flex-direction:column;gap:2px}
+        .cal-band{height:12px;border-radius:2px;display:flex;align-items:center;padding:0 3px;overflow:hidden}
+        .cal-band-lbl{font-size:.46rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
+        .cal-band-start{border-radius:5px 2px 2px 5px}
+        .cal-band-end{border-radius:2px 5px 5px 2px}
+        .cal-band-solo{border-radius:5px}
+        .cal-band-mid{border-radius:2px}
 
-        /* ── ENCUESTAS LISTA ── */
-        .enc-lista { overflow-y:auto; max-height:400px; }
-        .enc-lista::-webkit-scrollbar { width:4px; }
-        .enc-lista::-webkit-scrollbar-thumb { background:rgba(201,169,110,.2); border-radius:99px; }
-        .enc-item { padding:1rem 1.25rem; border-bottom:1px solid rgba(201,169,110,.07); transition:background .15s; }
-        .enc-item:last-child { border-bottom:none; }
-        .enc-item:hover { background:rgba(201,169,110,.03); }
+        .cal-tooltip{position:absolute;top:calc(100% + 5px);left:50%;transform:translateX(-50%);z-index:200;background:#1a1a14;color:#f5efe6;border-radius:10px;padding:.55rem .75rem;min-width:165px;max-width:220px;box-shadow:0 8px 22px rgba(0,0,0,.28);pointer-events:none}
+        .cal-tooltip::before{content:'';position:absolute;top:-4px;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top:0;border-bottom-color:#1a1a14}
+        .cal-tt-date{font-size:.54rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:rgba(201,169,110,.75);margin-bottom:.35rem}
+        .cal-tt-item{display:flex;align-items:center;gap:.38rem;padding:.25rem 0;border-top:1px solid rgba(255,255,255,.07)}
+        .cal-tt-dot{width:7px;height:7px;border-radius:2px;flex-shrink:0}
+        .cal-tt-num{font-size:.6rem;font-weight:700;color:#c9a96e}
+        .cal-tt-hab{font-size:.55rem;color:rgba(245,239,230,.52)}
 
-        .enc-item-top { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; margin-bottom:.6rem; }
-        .enc-guest { font-size:.76rem; font-weight:600; color:#1a1a14; }
-        .enc-origin { font-size:.62rem; color:#b8a898; margin-top:2px; }
-        .enc-right { display:flex; flex-direction:column; align-items:flex-end; gap:.3rem; flex-shrink:0; }
-        .enc-score { font-family:'Cormorant Garamond',serif; font-size:1.4rem; font-weight:600; line-height:1; }
-        .enc-stars { display:flex; gap:1px; font-size:.65rem; }
-        .enc-star-filled { color:#e8832a; }
-        .enc-star-empty  { color:rgba(201,169,110,.25); }
-        .enc-recom { display:inline-flex; align-items:center; gap:.3rem; font-size:.57rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:.16rem .5rem; border-radius:50px; white-space:nowrap; }
-        .enc-recom.yes { background:rgba(90,158,111,.08); color:#5a9e6f; border:1px solid rgba(90,158,111,.18); }
-        .enc-recom.no  { background:rgba(212,69,26,.06); color:#d4451a; border:1px solid rgba(212,69,26,.15); }
+        .cal-stats{display:flex;gap:.6rem;padding:.75rem 1.1rem;border-top:1px solid rgba(201,169,110,.1);flex-wrap:wrap}
+        .cal-stat{flex:1;min-width:65px;text-align:center;padding:.5rem .35rem;border-radius:9px;background:rgba(201,169,110,.05);border:1px solid rgba(201,169,110,.1)}
+        .cal-stat-num{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;color:#1a1a14;line-height:1}
+        .cal-stat-lbl{font-size:.49rem;letter-spacing:.09em;text-transform:uppercase;color:#b8a898;margin-top:.12rem}
 
-        .enc-bars { display:grid; grid-template-columns:1fr 1fr; gap:.4rem .85rem; margin-bottom:.55rem; }
-        .enc-bar-row { display:flex; align-items:center; gap:.5rem; }
-        .enc-bar-lbl { font-size:.58rem; color:#b8a898; letter-spacing:.06em; text-transform:uppercase; width:52px; flex-shrink:0; }
+        /* ══ PANELS ══ */
+        .panels-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:1.1rem;animation:fadeUp .45s .1s both}
+        @media(max-width:860px){.panels-grid{grid-template-columns:1fr}}
+        .panel{background:#fff;border:1px solid rgba(201,169,110,.16);border-radius:20px;overflow:hidden}
+        .panel-hd{padding:.9rem 1.3rem;border-bottom:1px solid rgba(201,169,110,.1);display:flex;align-items:center;justify-content:space-between;gap:.55rem}
+        .panel-hd-left{display:flex;align-items:center;gap:.55rem}
+        .panel-hd-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0}
+        .panel-hd-icon.rv{background:rgba(232,131,42,.1)}
+        .panel-hd-icon.enc{background:rgba(201,169,110,.1)}
+        .panel-hd-title{font-family:'Cormorant Garamond',serif;font-size:.95rem;font-weight:600;color:#1a1a14}
+        .panel-hd-right{display:flex;align-items:center;gap:.45rem}
+        .panel-badge{font-size:.54rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;padding:.18rem .55rem;border-radius:50px;white-space:nowrap}
+        .panel-badge.rv{background:rgba(232,131,42,.1);color:#e8832a;border:1px solid rgba(232,131,42,.18)}
+        .panel-badge.enc{background:rgba(201,169,110,.1);color:#c9a96e;border:1px solid rgba(201,169,110,.22)}
+        .panel-badge.green{background:rgba(90,158,111,.08);color:#5a9e6f;border:1px solid rgba(90,158,111,.2)}
+        .panel-loading{padding:2.75rem;display:flex;justify-content:center}
+        .panel-spin{width:17px;height:17px;border-radius:50%;border:2px solid rgba(201,169,110,.2);border-top-color:#e8832a;animation:spin .7s linear infinite}
+        .panel-empty{padding:2.25rem 1.5rem;text-align:center;display:flex;flex-direction:column;align-items:center;gap:.5rem}
+        .panel-empty-icon{width:38px;height:38px;border-radius:50%;background:rgba(201,169,110,.07);border:1px solid rgba(201,169,110,.15);display:flex;align-items:center;justify-content:center;font-size:1rem}
+        .panel-empty-txt{font-size:.66rem;color:#b8a898}
 
-        .enc-comment { font-size:.7rem; color:#7a6e5f; line-height:1.55; font-style:italic; padding:.45rem .7rem; background:rgba(201,169,110,.05); border-left:2px solid rgba(201,169,110,.28); border-radius:0 6px 6px 0; }
+        .enc-tabs{display:flex;gap:.18rem;background:rgba(201,169,110,.06);border-radius:50px;padding:2px;border:1px solid rgba(201,169,110,.14)}
+        .enc-tab{padding:.2rem .65rem;border-radius:50px;border:none;background:none;cursor:pointer;font-family:'Montserrat',sans-serif;font-size:.56rem;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:#b8a898;transition:all .18s}
+        .enc-tab.active{background:#fff;color:#7a6e5f;box-shadow:0 1px 3px rgba(74,64,53,.1)}
 
-        /* ── ENCUESTAS RESUMEN ── */
-        .enc-resumen { padding:1.5rem; display:flex; flex-direction:column; gap:1.25rem; }
-        .enc-res-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:.85rem; }
-        .enc-kpi { background:rgba(201,169,110,.06); border:1px solid rgba(201,169,110,.14); border-radius:14px; padding:.9rem 1rem; text-align:center; }
-        .enc-kpi-num { font-family:'Cormorant Garamond',serif; font-size:1.8rem; font-weight:600; color:#1a1a14; line-height:1; }
-        .enc-kpi-num.accent { color:#e8832a; }
-        .enc-kpi-num.green  { color:#5a9e6f; }
-        .enc-kpi-lbl { font-size:.58rem; letter-spacing:.12em; text-transform:uppercase; color:#b8a898; margin-top:.3rem; }
+        .rv-wrap{overflow-y:auto;max-height:360px}
+        .rv-wrap::-webkit-scrollbar{width:3px}
+        .rv-wrap::-webkit-scrollbar-thumb{background:rgba(201,169,110,.18);border-radius:99px}
+        .rv-table{width:100%;border-collapse:collapse}
+        .rv-table thead tr{position:sticky;top:0;background:#fff;z-index:1}
+        .rv-table th{padding:.5rem .85rem;font-size:.52rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#b8a898;text-align:left;border-bottom:1px solid rgba(201,169,110,.1);white-space:nowrap}
+        .rv-table tbody tr{border-bottom:1px solid rgba(201,169,110,.06);transition:background .14s}
+        .rv-table tbody tr:last-child{border-bottom:none}
+        .rv-table tbody tr:hover{background:rgba(201,169,110,.035)}
+        .rv-table td{padding:.65rem .85rem;font-size:.7rem;color:#1a1a14;vertical-align:middle}
+        .rv-id{font-family:'Cormorant Garamond',serif;font-size:.88rem;font-weight:600;color:#e8832a}
+        .rv-guest-name{font-weight:600;font-size:.7rem;white-space:nowrap}
+        .rv-guest-sub{font-size:.57rem;color:#b8a898;margin-top:1px}
+        .rv-date-in{font-size:.63rem;color:#4a4035;white-space:nowrap}
+        .rv-date-out{font-size:.58rem;color:#b8a898;margin-top:1px;white-space:nowrap}
+        .rv-hab{display:inline-block;background:rgba(42,122,232,.07);color:#2a7ae8;border:1px solid rgba(42,122,232,.17);border-radius:5px;padding:.1rem .38rem;font-size:.58rem;font-weight:600}
+        .rv-monto{font-family:'Cormorant Garamond',serif;font-size:.9rem;font-weight:600;color:#1a1a14;white-space:nowrap}
+        .rv-pend{display:inline-flex;align-items:center;gap:.25rem;background:rgba(232,131,42,.08);color:#e8832a;border:1px solid rgba(232,131,42,.17);border-radius:50px;padding:.13rem .5rem;font-size:.53rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
+        .rv-pend::before{content:'';width:4px;height:4px;border-radius:50%;background:#e8832a;animation:pulse 1.5s ease infinite}
+        .rv-btn-ver{background:rgba(201,169,110,.09);color:#7a6e5f;border:1px solid rgba(201,169,110,.22);border-radius:6px;padding:.22rem .55rem;font-size:.55rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;transition:all .18s;font-family:'Montserrat',sans-serif;white-space:nowrap;text-decoration:none;display:inline-block}
+        .rv-btn-ver:hover{background:rgba(201,169,110,.17);color:#4a4035}
+        .rv-footer{padding:.65rem 1rem;border-top:1px solid rgba(201,169,110,.08);display:flex;justify-content:flex-end}
+        .rv-link-all{font-size:.57rem;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#e8832a;text-decoration:none;display:inline-flex;align-items:center;gap:.25rem;transition:gap .18s}
+        .rv-link-all:hover{gap:.45rem}
 
-        .enc-res-bars { display:flex; flex-direction:column; gap:.75rem; }
-        .enc-res-row { display:flex; align-items:center; gap:.85rem; }
-        .enc-res-lbl { font-size:.64rem; font-weight:600; color:#7a6e5f; width:72px; flex-shrink:0; }
-        .enc-res-bar-bg { flex:1; height:7px; background:rgba(201,169,110,.13); border-radius:99px; overflow:hidden; }
-        .enc-res-bar-fill { height:100%; background:linear-gradient(90deg,#e8832a,#c9a96e); border-radius:99px; transition:width .7s ease; }
-        .enc-res-val { font-size:.72rem; font-weight:700; color:#1a1a14; width:24px; text-align:right; }
-
-        .enc-recom-card { background:rgba(90,158,111,.06); border:1px solid rgba(90,158,111,.18); border-radius:14px; padding:.9rem 1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
-        .enc-recom-card-txt { font-size:.72rem; color:#5a9e6f; font-weight:600; line-height:1.4; }
-        .enc-recom-card-pct { font-family:'Cormorant Garamond',serif; font-size:2rem; font-weight:600; color:#5a9e6f; }
+        .enc-lista{overflow-y:auto;max-height:360px}
+        .enc-lista::-webkit-scrollbar{width:3px}
+        .enc-lista::-webkit-scrollbar-thumb{background:rgba(201,169,110,.18);border-radius:99px}
+        .enc-item{padding:.85rem 1.15rem;border-bottom:1px solid rgba(201,169,110,.06);transition:background .14s}
+        .enc-item:last-child{border-bottom:none}
+        .enc-item:hover{background:rgba(201,169,110,.025)}
+        .enc-item-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.55rem;margin-bottom:.45rem}
+        .enc-guest{font-size:.7rem;font-weight:600;color:#1a1a14}
+        .enc-origin{font-size:.58rem;color:#b8a898;margin-top:1px}
+        .enc-right{display:flex;flex-direction:column;align-items:flex-end;gap:.22rem;flex-shrink:0}
+        .enc-score{font-family:'Cormorant Garamond',serif;font-size:1.25rem;font-weight:600;line-height:1}
+        .enc-stars{display:flex;gap:1px;font-size:.6rem}
+        .enc-star-filled{color:#e8832a}
+        .enc-star-empty{color:rgba(201,169,110,.22)}
+        .enc-recom{display:inline-flex;align-items:center;gap:.22rem;font-size:.52rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:.12rem .42rem;border-radius:50px;white-space:nowrap}
+        .enc-recom.yes{background:rgba(90,158,111,.08);color:#5a9e6f;border:1px solid rgba(90,158,111,.17)}
+        .enc-recom.no{background:rgba(212,69,26,.06);color:#d4451a;border:1px solid rgba(212,69,26,.14)}
+        .enc-bars{display:grid;grid-template-columns:1fr 1fr;gap:.32rem .7rem;margin-bottom:.4rem}
+        .enc-bar-row{display:flex;align-items:center;gap:.4rem}
+        .enc-bar-lbl{font-size:.54rem;color:#b8a898;letter-spacing:.05em;text-transform:uppercase;width:48px;flex-shrink:0}
+        .enc-comment{font-size:.65rem;color:#7a6e5f;line-height:1.5;font-style:italic;padding:.38rem .6rem;background:rgba(201,169,110,.05);border-left:2px solid rgba(201,169,110,.26);border-radius:0 4px 4px 0}
+        .enc-resumen{padding:1.1rem;display:flex;flex-direction:column;gap:1rem}
+        .enc-res-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem}
+        .enc-kpi{background:rgba(201,169,110,.06);border:1px solid rgba(201,169,110,.13);border-radius:11px;padding:.75rem .85rem;text-align:center}
+        .enc-kpi-num{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:600;color:#1a1a14;line-height:1}
+        .enc-kpi-num.accent{color:#e8832a}
+        .enc-kpi-num.green{color:#5a9e6f}
+        .enc-kpi-lbl{font-size:.53rem;letter-spacing:.11em;text-transform:uppercase;color:#b8a898;margin-top:.22rem}
+        .enc-res-bars{display:flex;flex-direction:column;gap:.6rem}
+        .enc-res-row{display:flex;align-items:center;gap:.7rem}
+        .enc-res-lbl{font-size:.6rem;font-weight:600;color:#7a6e5f;width:65px;flex-shrink:0}
+        .enc-res-bar-bg{flex:1;height:5px;background:rgba(201,169,110,.12);border-radius:99px;overflow:hidden}
+        .enc-res-bar-fill{height:100%;background:linear-gradient(90deg,#e8832a,#c9a96e);border-radius:99px;transition:width .7s ease}
+        .enc-res-val{font-size:.67rem;font-weight:700;color:#1a1a14;width:20px;text-align:right}
+        .enc-recom-card{background:rgba(90,158,111,.06);border:1px solid rgba(90,158,111,.17);border-radius:11px;padding:.75rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:.65rem}
+        .enc-recom-card-txt{font-size:.65rem;color:#5a9e6f;font-weight:600;line-height:1.4}
+        .enc-recom-card-pct{font-family:'Cormorant Garamond',serif;font-size:1.7rem;font-weight:600;color:#5a9e6f}
       `}</style>
 
-      <div className="dash-root">
+      <div className="shell">
 
-        {/* ── Navbar ── */}
-        <header className="dash-nav">
-          <div className="dash-nav-inner">
-            <div className="nav-logo">
-              <div className="nav-logo-icon">
+        {/* ════════════════════════
+            SIDEBAR
+        ════════════════════════ */}
+        <aside className="sidebar">
+
+          {/* Logo + usuario */}
+          <div className="sb-top">
+            <div className="sb-logo-row">
+              <div className="sb-logo-icon">
                 <svg viewBox="0 0 24 24"><path d="M12.65 10A6 6 0 1 0 11 14.54V17H9v2h2v2h2v-2h2v-2h-2v-2.46A6 6 0 0 0 12.65 10zM7 10a4 4 0 1 1 4 4 4 4 0 0 1-4-4z"/></svg>
               </div>
-              <div>
-                <div className="nav-logo-text">Hostal Las Mercedes</div>
-                <div className="nav-logo-sub">Panel de Administración</div>
-              </div>
-            </div>
-
-            <div className="nav-right">
-              <div className="nav-user-info">
-                <p className="nav-user-name">{usuario?.nombre}</p>
-                <p className="nav-user-email">{usuario?.email}</p>
-              </div>
-              <div className="nav-avatar">{usuario?.nombre?.charAt(0).toUpperCase()}</div>
-              <button onClick={handleLogout} className="nav-logout">
-                <svg fill="none" viewBox="0 0 24 24" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"/>
-                </svg>
-                Salir
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* ── Main ── */}
-        <main className="dash-main">
-          <div className="dash-header">
-            <div className="ornament">
-              <div className="ornament-line" />
-              <div className="ornament-diamond" />
-              <div className="ornament-line" />
-            </div>
-            <h1 className="dash-welcome">
-              Bienvenido, <em>{usuario?.nombre?.split(" ")[0]}</em>
-            </h1>
-            <p className="dash-subtitle">Resumen de actividad del hotel</p>
-          </div>
-
-          {/* Cards de navegación */}
-          <div className="dash-grid">
-            {visibleCards.map(item => (
-              <div key={item.label} className="dash-card-wrap">
-                <Link
-                  href={item.href}
-                  className={`dash-card${activeCard === item.label ? " card-pop" : ""}`}
-                  style={{
-                    "--accent":        item.accent,
-                    "--accent-bg":     `${item.accent}18`,
-                    "--accent-shadow": `${item.accent}40`,
-                    "--grad":          item.grad,
-                  } as React.CSSProperties}
-                  onMouseDown={() => setActiveCard(item.label)}
-                  onAnimationEnd={() => setActiveCard(null)}
-                >
-                  <div className="card-top">
-                    <div className="card-icon-wrap">{item.icon}</div>
-                    <span className="card-arrow">↗</span>
-                  </div>
-                  <div className="card-bottom">
-                    <p className="card-label">{item.label}</p>
-                    <p className="card-desc">{item.desc}</p>
-                    <span className="card-cta">Abrir módulo →</span>
-                  </div>
-                </Link>
-              </div>
-            ))}
-          </div>
-
-          {/* ════════════════════════════════════
-              SEPARADOR
-          ════════════════════════════════════ */}
-          <div className="section-sep">
-            <div className="section-sep-line" />
-            <div className="section-sep-diamond" />
-            <span className="section-sep-title">Actividad reciente</span>
-            <div className="section-sep-diamond" />
-            <div className="section-sep-line" />
-          </div>
-
-          {/* ════════════════════════════════════
-              PANELES
-          ════════════════════════════════════ */}
-          <div className="panels-grid">
-
-            {/* ── PANEL RESERVAS PENDIENTES ── */}
-            <div className="panel">
-              <div className="panel-hd">
-                <div className="panel-hd-left">
-                  <div className="panel-hd-icon rv">🗓️</div>
-                  <span className="panel-hd-title">Reservas pendientes</span>
+              {!sideCollapsed && (
+                <div>
+                  <div className="sb-logo-txt">Las Mercedes</div>
+                  <div className="sb-logo-sub">Administración</div>
                 </div>
-                <div className="panel-hd-right">
-                  {!loadingR && (
-                    <span className={`panel-badge ${reservas.length > 0 ? "rv" : "enc"}`}>
-                      {reservas.length} {reservas.length === 1 ? "pendiente" : "pendientes"}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {loadingR ? (
-                <div className="panel-loading"><div className="panel-spin" /></div>
-              ) : reservas.length === 0 ? (
-                <div className="panel-empty">
-                  <div className="panel-empty-icon">✓</div>
-                  <p className="panel-empty-txt">No hay reservas pendientes de confirmación</p>
-                </div>
-              ) : (
-                <>
-                  <div className="rv-wrap">
-                    <table className="rv-table">
-                      <thead>
-                        <tr>
-                          <th>#</th>
-                          <th>Huésped</th>
-                          <th>Entrada</th>
-                          <th>Hab.</th>
-                          <th>Total</th>
-                          <th>Estado</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reservas.map(r => (
-                          <tr key={r.id_reserva}>
-                            <td><span className="rv-id">#{r.id_reserva}</span></td>
-                            <td>
-                              <div className="rv-guest-name">
-                                {r.nombres ? `${r.nombres} ${r.apellidos ?? ""}`.trim() : `Huésped #${r.id_huesped}`}
-                              </div>
-                              <div className="rv-guest-sub">{r.num_personas} {r.num_personas === 1 ? "persona" : "personas"}</div>
-                            </td>
-                            <td>
-                              <div className="rv-date-in">{fmtFecha(r.fecha_entrada)}</div>
-                              <div className="rv-date-out">hasta {fmtFecha(r.fecha_salida)}</div>
-                            </td>
-                            <td>
-                              {r.habitacion
-                                ? <span className="rv-hab">{r.habitacion}</span>
-                                : <span style={{color:"#ddd5c4",fontSize:".65rem"}}>—</span>}
-                            </td>
-                            <td><span className="rv-monto">{fmtMoney(r.monto_total)}</span></td>
-                            <td><span className="rv-pend">Pendiente</span></td>
-                            <td>
-                              <Link href={`/dashboard/reservas?id=${r.id_reserva}`} className="rv-btn-ver">
-                                Ver
-                              </Link>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="rv-footer">
-                    <Link href="/dashboard/reservas" className="rv-link-all">
-                      Ver todas las reservas <span>→</span>
-                    </Link>
-                  </div>
-                </>
               )}
             </div>
-
-            {/* ── PANEL ENCUESTAS ── */}
-            <div className="panel">
-              <div className="panel-hd">
-                <div className="panel-hd-left">
-                  <div className="panel-hd-icon enc">⭐</div>
-                  <span className="panel-hd-title">Encuestas de huéspedes</span>
+            <div className="sb-user-row">
+              <div className="sb-avatar">{usuario?.nombre?.charAt(0).toUpperCase()}</div>
+              {!sideCollapsed && (
+                <div style={{ overflow: "hidden" }}>
+                  <div className="sb-user-name">{usuario?.nombre?.split(" ")[0]}</div>
+                  <div className="sb-user-rol">{usuario?.rol}</div>
                 </div>
-                <div className="panel-hd-right">
-                  {!loadingE && encuestas.length > 0 && (
-                    <span className="panel-badge green">
-                      {encuestas.length} respuesta{encuestas.length !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                  <div className="enc-tabs">
-                    <button
-                      className={`enc-tab${encTab === "lista" ? " active" : ""}`}
-                      onClick={() => setEncTab("lista")}
-                    >Lista</button>
-                    <button
-                      className={`enc-tab${encTab === "resumen" ? " active" : ""}`}
-                      onClick={() => setEncTab("resumen")}
-                    >Resumen</button>
+              )}
+            </div>
+          </div>
+
+          {/* Nav items */}
+          <nav className="sb-mid">
+            {!sideCollapsed && <div className="sb-section-lbl">Módulos</div>}
+            {visibleNavs.map(item => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="sb-item"
+                title={sideCollapsed ? item.label : undefined}
+              >
+                <span className="sb-item-icon">{item.icon}</span>
+                {!sideCollapsed && (
+                  <>
+                    <span className="sb-item-txt">{item.label}</span>
+                    <span className="sb-item-arr">›</span>
+                  </>
+                )}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Toggle + Logout */}
+          <div className="sb-bot">
+            <button
+              className="sb-toggle"
+              onClick={() => setSideCollapsed(v => !v)}
+              title={sideCollapsed ? "Expandir" : "Colapsar"}
+            >
+              <svg fill="none" viewBox="0 0 14 14" stroke="currentColor" style={{ transform: sideCollapsed ? "scaleX(-1)" : "none" }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 2L4 7l5 5M5 7h7"/>
+              </svg>
+              {!sideCollapsed && <span>Colapsar menú</span>}
+            </button>
+            <button className="sb-logout" onClick={handleLogout} title={sideCollapsed ? "Cerrar sesión" : undefined}>
+              <svg fill="none" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"/>
+              </svg>
+              {!sideCollapsed && <span>Cerrar sesión</span>}
+            </button>
+          </div>
+        </aside>
+
+        {/* ════════════════════════
+            CONTENIDO
+        ════════════════════════ */}
+        <div className="dash-body">
+
+          {/* Topbar */}
+          <div className="topbar">
+            <div>
+              <div className="tb-title">Bienvenido, <em>{usuario?.nombre?.split(" ")[0]}</em></div>
+              <div className="tb-sub">Panel de administración</div>
+            </div>
+            <span className="tb-date">
+              {new Date().toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </span>
+          </div>
+
+          <div className="dash-scroll">
+
+            {/* ── KPI STRIP ── */}
+            <div className="kpi-strip">
+              <div className="kpi-card">
+                <div className="kpi-icon" style={{ background: "rgba(232,131,42,.1)" }}>🗓️</div>
+                <div><div className="kpi-num">{loadingR ? "—" : reservas.length}</div><div className="kpi-lbl">Reservas pendientes</div></div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-icon" style={{ background: "rgba(90,158,111,.1)" }}>✅</div>
+                <div><div className="kpi-num" style={{ color: "#5a9e6f" }}>{calReservas.filter(r => r.estado === "Confirmada").length || "—"}</div><div className="kpi-lbl">Confirmadas</div></div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-icon" style={{ background: "rgba(100,140,200,.1)" }}>🏨</div>
+                <div><div className="kpi-num" style={{ color: "#6490c8" }}>{calReservas.filter(r => r.estado === "Completada").length || "—"}</div><div className="kpi-lbl">Completadas</div></div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-icon" style={{ background: "rgba(201,169,110,.1)" }}>⭐</div>
+                <div><div className="kpi-num" style={{ color: "#c9a96e" }}>{loadingE ? "—" : encuestas.length}</div><div className="kpi-lbl">Encuestas recibidas</div></div>
+              </div>
+            </div>
+
+            {/* ── CALENDARIO ── */}
+            <div className="cal-panel">
+              <div className="cal-hd">
+                <div className="cal-hd-left">
+                  <div className="cal-hd-icon">📅</div>
+                  <span className="cal-hd-title">Calendario de ocupación</span>
+                </div>
+                <div className="cal-hd-right">
+                  <div className="cal-legend">
+                    {(["Confirmada","Pendiente","Completada","Cancelada"] as const).map(e => (
+                      <div key={e} className="cal-leg-item">
+                        <div className="cal-leg-dot" style={{ background: BAND_COLORS[e]?.bg }}/>
+                        {e}
+                      </div>
+                    ))}
+                  </div>
+                  <select className="cal-hab-select" value={calHab} onChange={e => setCalHab(e.target.value)}>
+                    <option value="todas">Todas las hab.</option>
+                    {habitaciones.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                  <div className="cal-nav">
+                    <button className="cal-nav-btn" onClick={() => setCalMes(d => new Date(d.getFullYear(), d.getMonth()-1, 1))}>
+                      <svg width="8" height="8" fill="none" viewBox="0 0 8 8"><path d="M5.5 1L2 4l3.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+                    <span className="cal-nav-mes">{MESES[mes]} {año}</span>
+                    <button className="cal-nav-btn" onClick={() => setCalMes(d => new Date(d.getFullYear(), d.getMonth()+1, 1))}>
+                      <svg width="8" height="8" fill="none" viewBox="0 0 8 8"><path d="M2.5 1L6 4l-3.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {loadingE ? (
-                <div className="panel-loading"><div className="panel-spin" /></div>
-              ) : encuestas.length === 0 ? (
-                <div className="panel-empty">
-                  <div className="panel-empty-icon">⭐</div>
-                  <p className="panel-empty-txt">Aún no hay encuestas respondidas</p>
+              <div className="cal-body">
+                <div className="cal-weekdays">
+                  {DIAS_SEMANA.map(d => <div key={d} className="cal-wd">{d}</div>)}
                 </div>
-              ) : encTab === "lista" ? (
-
-                // ── VISTA LISTA ──────────────────────────
-                <div className="enc-lista">
-                  {encuestas.map(e => {
-                    const avg = avgCalif(e);
-                    const avgRnd = Math.round(avg);
-                    const scoreColor = avg >= 4.5 ? "#5a9e6f" : avg >= 3.5 ? "#7aab8a" : avg >= 2.5 ? "#c9a96e" : "#e8832a";
+                <div className="cal-grid">
+                  {Array.from({ length: filas * 7 }).map((_, idx) => {
+                    const dayNum   = idx - offsetLunes + 1;
+                    const esDelMes = dayNum >= 1 && dayNum <= ultimo.getDate();
+                    if (!esDelMes) return <div key={idx} className="cal-day-empty"/>;
+                    const fecha   = new Date(año, mes, dayNum);
+                    const k       = dayKey(fecha);
+                    const esHoy   = sameDay(fecha, hoy);
+                    const bandas  = bandCache[k] ?? [];
+                    const hasTt   = calTooltip && sameDay(calTooltip.day, fecha);
                     return (
-                      <div key={e.id_encuesta} className="enc-item">
-                        <div className="enc-item-top">
-                          <div>
-                            <div className="enc-guest">
-                              {e.nombres
-                                ? `${e.nombres} ${e.apellidos ?? ""}`.trim()
-                                : `Orden hospedaje #${e.id_orden_hospedaje}`}
-                            </div>
-                            <div className="enc-origin">
-                              {[e.lugar_origen, e.motivo_viaje].filter(Boolean).join(" · ") || "Sin detalle"}
-                            </div>
+                      <div
+                        key={idx}
+                        className={`cal-day${esHoy ? " cal-day-today" : ""}`}
+                        onMouseEnter={() => bandas.length > 0 && setCalTooltip({ day: fecha, reservas: bandas.map(b => b.reserva) })}
+                        onMouseLeave={() => setCalTooltip(null)}
+                      >
+                        <div className="cal-day-num-wrap"><span className="cal-day-num">{dayNum}</span></div>
+                        {bandas.length > 0 && (
+                          <div className="cal-bands">
+                            {bandas.slice(0, 3).map((b, bi) => {
+                              const c  = BAND_COLORS[String(b.reserva.estado)] ?? { bg: "rgba(180,170,160,.32)", text: "#7a6e5f" };
+                              const rc = b.isStart && b.isEnd ? "cal-band-solo" : b.isStart ? "cal-band-start" : b.isEnd ? "cal-band-end" : "cal-band-mid";
+                              const ms: React.CSSProperties = b.isStart ? {} : b.isEnd ? { marginLeft: "-4px" } : { marginLeft: "-4px", marginRight: "-4px" };
+                              return (
+                                <div key={`${b.reserva.id_reserva}-${bi}`} className={`cal-band ${rc}`} style={{ background: c.bg, ...ms }}>
+                                  {b.isStart && <span className="cal-band-lbl" style={{ color: c.text }}>{b.reserva.habitacion ?? `#${b.reserva.id_reserva}`}</span>}
+                                </div>
+                              );
+                            })}
+                            {bandas.length > 3 && <span style={{ fontSize: ".45rem", color: "#b8a898", paddingLeft: "2px" }}>+{bandas.length - 3}</span>}
                           </div>
-                          <div className="enc-right">
-                            <span className="enc-score" style={{ color: scoreColor }}>{avg.toFixed(1)}</span>
-                            <div className="enc-stars">
-                              {[1,2,3,4,5].map(n => (
-                                <span key={n} className={n <= avgRnd ? "enc-star-filled" : "enc-star-empty"}>★</span>
-                              ))}
-                            </div>
-                            <span className={`enc-recom ${e.recomendacion ? "yes" : "no"}`}>
-                              {e.recomendacion ? "✓ Recomienda" : "✗ No recomienda"}
-                            </span>
+                        )}
+                        {hasTt && calTooltip && (
+                          <div className="cal-tooltip">
+                            <div className="cal-tt-date">{fecha.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" })}</div>
+                            {calTooltip.reservas.map(r => {
+                              const c = BAND_COLORS[String(r.estado)] ?? { bg: "rgba(180,170,160,.32)", text: "#7a6e5f" };
+                              return (
+                                <div key={r.id_reserva} className="cal-tt-item">
+                                  <div className="cal-tt-dot" style={{ background: c.bg }}/>
+                                  <div>
+                                    <div className="cal-tt-num">Reserva #{r.id_reserva}</div>
+                                    {r.habitacion && <div className="cal-tt-hab">{r.habitacion}</div>}
+                                    <div className="cal-tt-hab">
+                                      {new Date(r.fecha_entrada+"T12:00:00").toLocaleDateString("es-PE",{day:"numeric",month:"short"})}
+                                      {" → "}
+                                      {new Date(r.fecha_salida+"T12:00:00").toLocaleDateString("es-PE",{day:"numeric",month:"short"})}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        </div>
-
-                        <div className="enc-bars">
-                          {([
-                            { lbl: "Limpieza",  val: e.calificacion_limpieza  },
-                            { lbl: "Servicio",  val: e.calificacion_servicio  },
-                            { lbl: "Ubicación", val: e.calificacion_ubicacion },
-                            { lbl: "Precio",    val: e.calificacion_precio    },
-                          ] as const).map(c => (
-                            <div key={c.lbl} className="enc-bar-row">
-                              <span className="enc-bar-lbl">{c.lbl}</span>
-                              <StarBar val={c.val} />
-                            </div>
-                          ))}
-                        </div>
-
-                        {e.comentarios && (
-                          <div className="enc-comment">"{e.comentarios}"</div>
                         )}
                       </div>
                     );
                   })}
                 </div>
+              </div>
 
-              ) : (
-
-                // ── VISTA RESUMEN ────────────────────────
-                <div className="enc-resumen">
-                  {totales && (
-                    <>
-                      <div className="enc-res-kpis">
-                        <div className="enc-kpi">
-                          <div className="enc-kpi-num accent">{totales.general.toFixed(1)}</div>
-                          <div className="enc-kpi-lbl">Prom. general</div>
-                        </div>
-                        <div className="enc-kpi">
-                          <div className="enc-kpi-num">{encuestas.length}</div>
-                          <div className="enc-kpi-lbl">Respuestas</div>
-                        </div>
-                        <div className="enc-kpi">
-                          <div className="enc-kpi-num green">{Math.round((totales.recomiendan / encuestas.length) * 100)}%</div>
-                          <div className="enc-kpi-lbl">Recomiendan</div>
-                        </div>
-                      </div>
-
-                      <div className="enc-res-bars">
-                        {([
-                          { lbl: "Limpieza",  val: totales.limpieza  },
-                          { lbl: "Servicio",  val: totales.servicio  },
-                          { lbl: "Ubicación", val: totales.ubicacion },
-                          { lbl: "Precio",    val: totales.precio    },
-                        ] as const).map(c => (
-                          <div key={c.lbl} className="enc-res-row">
-                            <span className="enc-res-lbl">{c.lbl}</span>
-                            <div className="enc-res-bar-bg">
-                              <div className="enc-res-bar-fill" style={{ width: `${(c.val / 5) * 100}%` }} />
-                            </div>
-                            <span className="enc-res-val">{c.val.toFixed(1)}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="enc-recom-card">
-                        <div className="enc-recom-card-txt">
-                          {totales.recomiendan} de {encuestas.length} huéspedes recomendarían el hostal
-                        </div>
-                        <div className="enc-recom-card-pct">
-                          {Math.round((totales.recomiendan / encuestas.length) * 100)}%
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+              <div className="cal-stats">
+                <div className="cal-stat"><div className="cal-stat-num">{reservasMes.length}</div><div className="cal-stat-lbl">Total en el mes</div></div>
+                <div className="cal-stat"><div className="cal-stat-num" style={{color:"#5a9e6f"}}>{statConfirmadas}</div><div className="cal-stat-lbl">Confirmadas</div></div>
+                <div className="cal-stat"><div className="cal-stat-num" style={{color:"#e8832a"}}>{statPendientes}</div><div className="cal-stat-lbl">Pendientes</div></div>
+                <div className="cal-stat"><div className="cal-stat-num" style={{color:"#6490c8"}}>{statCompletadas}</div><div className="cal-stat-lbl">Completadas</div></div>
+                <div className="cal-stat"><div className="cal-stat-num" style={{color:"#b8a898"}}>{statCanceladas}</div><div className="cal-stat-lbl">Canceladas</div></div>
+              </div>
             </div>
 
-          </div>{/* /panels-grid */}
-        </main>
-      </div>
+            {/* ── PANELS ── */}
+            <div className="panels-grid">
+
+              {/* Reservas pendientes */}
+              <div className="panel">
+                <div className="panel-hd">
+                  <div className="panel-hd-left">
+                    <div className="panel-hd-icon rv">🗓️</div>
+                    <span className="panel-hd-title">Reservas pendientes</span>
+                  </div>
+                  <div className="panel-hd-right">
+                    {!loadingR && (
+                      <span className={`panel-badge ${reservas.length > 0 ? "rv" : "enc"}`}>
+                        {reservas.length} {reservas.length === 1 ? "pendiente" : "pendientes"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {loadingR ? (
+                  <div className="panel-loading"><div className="panel-spin"/></div>
+                ) : reservas.length === 0 ? (
+                  <div className="panel-empty">
+                    <div className="panel-empty-icon">✓</div>
+                    <p className="panel-empty-txt">No hay reservas pendientes de confirmación</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="rv-wrap">
+                      <table className="rv-table">
+                        <thead><tr><th>#</th><th>Huésped</th><th>Entrada</th><th>Hab.</th><th>Total</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                          {reservas.map(r => (
+                            <tr key={r.id_reserva}>
+                              <td><span className="rv-id">#{r.id_reserva}</span></td>
+                              <td>
+                                <div className="rv-guest-name">{r.nombres ? `${r.nombres} ${r.apellidos ?? ""}`.trim() : `Huésped #${r.id_huesped}`}</div>
+                                <div className="rv-guest-sub">{r.num_personas} {r.num_personas === 1 ? "persona" : "personas"}</div>
+                              </td>
+                              <td>
+                                <div className="rv-date-in">{fmtFecha(r.fecha_entrada)}</div>
+                                <div className="rv-date-out">hasta {fmtFecha(r.fecha_salida)}</div>
+                              </td>
+                              <td>{r.habitacion ? <span className="rv-hab">{r.habitacion}</span> : <span style={{color:"#ddd5c4",fontSize:".6rem"}}>—</span>}</td>
+                              <td><span className="rv-monto">{fmtMoney(r.monto_total)}</span></td>
+                              <td><span className="rv-pend">Pendiente</span></td>
+                              <td><Link href={`/dashboard/reservas?id=${r.id_reserva}`} className="rv-btn-ver">Ver</Link></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="rv-footer">
+                      <Link href="/dashboard/reservas" className="rv-link-all">Ver todas las reservas <span>→</span></Link>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Encuestas */}
+              <div className="panel">
+                <div className="panel-hd">
+                  <div className="panel-hd-left">
+                    <div className="panel-hd-icon enc">⭐</div>
+                    <span className="panel-hd-title">Encuestas de huéspedes</span>
+                  </div>
+                  <div className="panel-hd-right">
+                    {!loadingE && encuestas.length > 0 && (
+                      <span className="panel-badge green">{encuestas.length} respuesta{encuestas.length !== 1 ? "s" : ""}</span>
+                    )}
+                    <div className="enc-tabs">
+                      <button className={`enc-tab${encTab==="lista"?" active":""}`} onClick={() => setEncTab("lista")}>Lista</button>
+                      <button className={`enc-tab${encTab==="resumen"?" active":""}`} onClick={() => setEncTab("resumen")}>Resumen</button>
+                    </div>
+                  </div>
+                </div>
+                {loadingE ? (
+                  <div className="panel-loading"><div className="panel-spin"/></div>
+                ) : encuestas.length === 0 ? (
+                  <div className="panel-empty">
+                    <div className="panel-empty-icon">⭐</div>
+                    <p className="panel-empty-txt">Aún no hay encuestas respondidas</p>
+                  </div>
+                ) : encTab === "lista" ? (
+                  <div className="enc-lista">
+                    {encuestas.map(e => {
+                      const avg    = avgCalif(e);
+                      const avgRnd = Math.round(avg);
+                      const sc     = avg >= 4.5 ? "#5a9e6f" : avg >= 3.5 ? "#7aab8a" : avg >= 2.5 ? "#c9a96e" : "#e8832a";
+                      return (
+                        <div key={e.id_encuesta} className="enc-item">
+                          <div className="enc-item-top">
+                            <div>
+                              <div className="enc-guest">{e.nombres ? `${e.nombres} ${e.apellidos ?? ""}`.trim() : `Orden #${e.id_orden_hospedaje}`}</div>
+                              <div className="enc-origin">{[e.lugar_origen, e.motivo_viaje].filter(Boolean).join(" · ") || "Sin detalle"}</div>
+                            </div>
+                            <div className="enc-right">
+                              <span className="enc-score" style={{ color: sc }}>{avg.toFixed(1)}</span>
+                              <div className="enc-stars">{[1,2,3,4,5].map(n => <span key={n} className={n<=avgRnd?"enc-star-filled":"enc-star-empty"}>★</span>)}</div>
+                              <span className={`enc-recom ${e.recomendacion?"yes":"no"}`}>{e.recomendacion?"✓ Recomienda":"✗ No recomienda"}</span>
+                            </div>
+                          </div>
+                          <div className="enc-bars">
+                            {([{lbl:"Limpieza",val:e.calificacion_limpieza},{lbl:"Servicio",val:e.calificacion_servicio},{lbl:"Ubicación",val:e.calificacion_ubicacion},{lbl:"Precio",val:e.calificacion_precio}] as const).map(c => (
+                              <div key={c.lbl} className="enc-bar-row">
+                                <span className="enc-bar-lbl">{c.lbl}</span>
+                                <StarBar val={c.val}/>
+                              </div>
+                            ))}
+                          </div>
+                          {e.comentarios && <div className="enc-comment">"{e.comentarios}"</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="enc-resumen">
+                    {totales && (
+                      <>
+                        <div className="enc-res-kpis">
+                          <div className="enc-kpi"><div className="enc-kpi-num accent">{totales.general.toFixed(1)}</div><div className="enc-kpi-lbl">Prom. general</div></div>
+                          <div className="enc-kpi"><div className="enc-kpi-num">{encuestas.length}</div><div className="enc-kpi-lbl">Respuestas</div></div>
+                          <div className="enc-kpi"><div className="enc-kpi-num green">{Math.round((totales.recomiendan/encuestas.length)*100)}%</div><div className="enc-kpi-lbl">Recomiendan</div></div>
+                        </div>
+                        <div className="enc-res-bars">
+                          {([{lbl:"Limpieza",val:totales.limpieza},{lbl:"Servicio",val:totales.servicio},{lbl:"Ubicación",val:totales.ubicacion},{lbl:"Precio",val:totales.precio}] as const).map(c => (
+                            <div key={c.lbl} className="enc-res-row">
+                              <span className="enc-res-lbl">{c.lbl}</span>
+                              <div className="enc-res-bar-bg"><div className="enc-res-bar-fill" style={{width:`${(c.val/5)*100}%`}}/></div>
+                              <span className="enc-res-val">{c.val.toFixed(1)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="enc-recom-card">
+                          <div className="enc-recom-card-txt">{totales.recomiendan} de {encuestas.length} huéspedes recomendarían el hostal</div>
+                          <div className="enc-recom-card-pct">{Math.round((totales.recomiendan/encuestas.length)*100)}%</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+            </div>{/* /panels-grid */}
+          </div>{/* /dash-scroll */}
+        </div>{/* /dash-body */}
+      </div>{/* /shell */}
     </>
   );
 }

@@ -32,6 +32,47 @@ export function getUser(): AuthUser | null {
 }
 
 /**
+ * Convierte mensajes de error crudos de SQL Server / ODBC en mensajes
+ * comprensibles para el usuario final.
+ *
+ * Patrón ODBC típico:
+ * ('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]
+ *   La habitación no está disponible en ese rango de fechas. (50000) (SQLExecDirectW)')
+ *
+ * Extrae solo el texto del mensaje y aplica overrides amigables si corresponde.
+ */
+function sanitizeSqlError(raw: string): string {
+  // 1. Extraer el mensaje limpio del patrón ODBC
+  const sqlMatch = raw.match(/\[SQL Server\](.+?)\s*\(\d+\)\s*\(SQL/);
+  const clean = sqlMatch ? sqlMatch[1].trim() : raw;
+
+  // 2. Tabla de overrides: patrón → mensaje amigable para el usuario
+  const overrides: Array<[RegExp, string]> = [
+    [/no está disponible en ese rango de fechas/i,
+      "La habitación no está disponible en las fechas seleccionadas. Por favor elige otras fechas u otra habitación."],
+    [/habitaci[oó]n.*no.*disponible/i,
+      "La habitación seleccionada no está disponible. Intenta con otra habitación."],
+    [/reserva.*solapada|conflicto.*reserva/i,
+      "Ya existe una reserva en ese período. Por favor elige un rango de fechas diferente."],
+    [/fecha.*entrada.*mayor.*salida|fecha.*inv[aá]lida/i,
+      "La fecha de entrada no puede ser posterior a la de salida."],
+    [/capacidad.*excedida|num_personas.*supera/i,
+      "El número de personas supera la capacidad máxima de la habitación."],
+    [/huesped.*no.*encontrado|huesped.*no.*existe/i,
+      "No se encontró el huésped. Verifica los datos e intenta nuevamente."],
+    [/pago.*insuficiente|monto.*incorrecto/i,
+      "El monto ingresado no es válido. Verifica el importe e intenta de nuevo."],
+  ];
+
+  for (const [pattern, friendly] of overrides) {
+    if (pattern.test(clean)) return friendly;
+  }
+
+  // 3. Si no hay override, devolver el texto limpio (sin ruido ODBC)
+  return clean;
+}
+
+/**
  * Fetch autenticado al backend FastAPI.
  *
  * En lugar de llamar a FastAPI directamente (lo que requeriría leer
@@ -64,11 +105,9 @@ export async function apiFetch<T = unknown>(
 
     let message: string;
     if (typeof detail === "string") {
-      // Error simple de negocio (el más común)
-      message = detail;
+      message = sanitizeSqlError(detail);
     } else if (Array.isArray(detail)) {
       // Error de validación FastAPI: [{loc, msg, type}, ...]
-      // Esto es lo que causaba "[object Object]"
       message = detail
         .map((d: { loc?: string[]; msg?: string }) => {
           const campo = d.loc?.slice(1).join(".") ?? "";

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { TOKEN_COOKIE } from "@/lib/auth";
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL;
 
 async function getToken() {
-  return (await cookies()).get("token")?.value;
+  return (await cookies()).get(TOKEN_COOKIE)?.value;
 }
 
 export async function PUT(

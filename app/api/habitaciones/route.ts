@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { TOKEN_COOKIE } from "@/lib/auth";
 
@@ -10,9 +10,9 @@ async function getToken() {
 
 export async function GET(req: NextRequest) {
   const token = await getToken();
-  const search = req.nextUrl.search; // preserva ?nombre=...&num_documento=...
+  const search = req.nextUrl.search;
 
-  const res = await fetch(`${BACKEND}/huespedes${search}`, {
+  const res = await fetch(`${BACKEND}/habitaciones${search}`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const token = await getToken();
   const body = await req.json();
 
-  const res = await fetch(`${BACKEND}/huespedes`, {
+  const res = await fetch(`${BACKEND}/habitaciones`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

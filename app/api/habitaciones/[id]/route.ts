@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { TOKEN_COOKIE } from "@/lib/auth";
 
@@ -8,16 +8,21 @@ async function getToken() {
   return (await cookies()).get(TOKEN_COOKIE)?.value;
 }
 
-export async function GET(req: NextRequest) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
   const token = await getToken();
-  const search = req.nextUrl.search; // preserva ?nombre=...&num_documento=...
+  const body = await req.json();
 
-  const res = await fetch(`${BACKEND}/huespedes${search}`, {
-    method: "GET",
+  const res = await fetch(`${BACKEND}/habitaciones/${id}`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
+    body: JSON.stringify(body),
     cache: "no-store",
   });
 
@@ -25,17 +30,19 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data, { status: res.status });
 }
 
-export async function POST(req: NextRequest) {
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
   const token = await getToken();
-  const body = await req.json();
 
-  const res = await fetch(`${BACKEND}/huespedes`, {
-    method: "POST",
+  const res = await fetch(`${BACKEND}/habitaciones/${id}`, {
+    method: "DELETE",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(body),
     cache: "no-store",
   });
 

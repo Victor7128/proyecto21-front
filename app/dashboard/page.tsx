@@ -129,15 +129,22 @@ export default function DashboardPage() {
     general:      encuestas.reduce((s, e) => s + avgCalif(e), 0) / encuestas.length,
   } : null;
 
+  // Roles reconocidos (deben coincidir con el valor exacto que devuelve usuario.rol)
+  // administrador ve todas las cards (sin restricción)
+  // null en roles = solo administrador
   const cards = [
-    { label: "Reservas",     icon: "🗓️", href: "/dashboard/reservas",     accent: "#e8832a", grad: "linear-gradient(135deg,#e8832a,#d4451a)", desc: "Gestiona las reservas activas" },
-    { label: "Habitaciones", icon: "🛏️", href: "/dashboard/habitaciones", accent: "#2a7ae8", grad: "linear-gradient(135deg,#2a7ae8,#1a4fd4)", desc: "Estado y disponibilidad" },
-    { label: "Huéspedes",    icon: "👤", href: "/dashboard/huespedes",     accent: "#8b2ae8", grad: "linear-gradient(135deg,#8b2ae8,#5a1ad4)", desc: "Registro de huéspedes" },
-    { label: "Pagos",        icon: "💳", href: "/dashboard/pagos",         accent: "#c9a96e", grad: "linear-gradient(135deg,#c9a96e,#a07840)", desc: "Control de facturación" },
-    { label: "Personal",     icon: "🧑‍💼", href: "/dashboard/personal",     accent: "#d4451a", grad: "linear-gradient(135deg,#d4451a,#a02810)", desc: "Administración del equipo" },
-    { label: "Conserjería",  icon: "🛎️", href: "/dashboard/conserjeria",   accent: "#2ab5a0", grad: "linear-gradient(135deg,#2ab5a0,#1a8070)", desc: "Solicitudes y servicios" },
-    { label: "Hospedaje",    icon: "🏨", href: "/dashboard/hospedaje",     accent: "#1a7ad4", grad: "linear-gradient(135deg,#1a7ad4,#0a50a0)", desc: "Control de estadías" },
+    { label: "Reservas",     icon: "🗓️", href: "/dashboard/reservas",     accent: "#e8832a", grad: "linear-gradient(135deg,#e8832a,#d4451a)", desc: "Gestiona las reservas activas",   roles: ["administrador", "recepcionista", "mantenimiento"] },
+    { label: "Habitaciones", icon: "🛏️", href: "/dashboard/habitaciones", accent: "#2a7ae8", grad: "linear-gradient(135deg,#2a7ae8,#1a4fd4)", desc: "Estado y disponibilidad",         roles: ["administrador"] },
+    { label: "Huéspedes",    icon: "👤", href: "/dashboard/huespedes",     accent: "#8b2ae8", grad: "linear-gradient(135deg,#8b2ae8,#5a1ad4)", desc: "Registro de huéspedes",           roles: ["administrador", "recepcionista"] },
+    { label: "Pagos",        icon: "💳", href: "/dashboard/pagos",         accent: "#c9a96e", grad: "linear-gradient(135deg,#c9a96e,#a07840)", desc: "Control de facturación",          roles: ["administrador", "recepcionista", "conserjeria"] },
+    { label: "Personal",     icon: "🧑‍💼", href: "/dashboard/personal",     accent: "#d4451a", grad: "linear-gradient(135deg,#d4451a,#a02810)", desc: "Administración del equipo",       roles: ["administrador"] },
+    { label: "Conserjería",  icon: "🛎️", href: "/dashboard/conserjeria",   accent: "#2ab5a0", grad: "linear-gradient(135deg,#2ab5a0,#1a8070)", desc: "Solicitudes y servicios",         roles: ["administrador", "recepcionista", "conserjeria"] },
+    { label: "Hospedaje",    icon: "🏨", href: "/dashboard/hospedaje",     accent: "#1a7ad4", grad: "linear-gradient(135deg,#1a7ad4,#0a50a0)", desc: "Control de estadías",             roles: ["administrador", "recepcionista", "mantenimiento"] },
   ];
+
+  // Normalizar el rol a minúsculas y sin tildes para comparación robusta
+  const rolNorm = (usuario?.rol ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const visibleCards = cards.filter(c => c.roles.includes(rolNorm));
 
   if (loading) return (
     <>
@@ -396,7 +403,7 @@ export default function DashboardPage() {
 
           {/* Cards de navegación */}
           <div className="dash-grid">
-            {cards.map(item => (
+            {visibleCards.map(item => (
               <div key={item.label} className="dash-card-wrap">
                 <Link
                   href={item.href}

@@ -421,6 +421,7 @@ export default function HuespedesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
+
                 <th className="text-left px-5 py-3 font-medium text-gray-600">Nombre completo</th>
                 <th className="text-left px-5 py-3 font-medium text-gray-600">Documento</th>
                 <th className="text-left px-5 py-3 font-medium text-gray-600">Teléfono</th>
@@ -448,6 +449,9 @@ export default function HuespedesPage() {
                 huespedes.map((h) => (
                   <tr key={h.id_huesped} className="border-b border-gray-100 hover:bg-gray-50 transition">
                     <td className="px-5 py-3.5 font-medium text-gray-800">
+                      {h.id_huesped}
+                    </td>
+                    <td className="px-5 py-3.5 font-medium text-gray-800">
                       {h.nombres} {h.apellidos}
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">
@@ -456,6 +460,7 @@ export default function HuespedesPage() {
                       </span>
                       {h.num_documento}
                     </td>
+
                     <td className="px-5 py-3.5 text-gray-600">{h.telefono ?? "—"}</td>
                     <td className="px-5 py-3.5 text-gray-600">{h.correo ?? "—"}</td>
                     <td className="px-5 py-3.5 text-gray-400 text-xs">

@@ -1,5 +1,44 @@
-import { NextRequest } from "next/server";
-import { listHandler, createHandler } from "@/lib/route-handler";
+import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { TOKEN_COOKIE } from "@/lib/auth";
 
-export const GET  = (req: NextRequest) => listHandler(req, "/reservas");
-export const POST = (req: NextRequest) => createHandler(req, "/reservas");
+const BACKEND = process.env.NEXT_PUBLIC_API_URL;
+
+async function getToken() {
+  return (await cookies()).get(TOKEN_COOKIE)?.value;
+}
+
+export async function GET(req: NextRequest) {
+  const token = await getToken();
+  const search = req.nextUrl.search; // preserva ?estado=1&id_huesped=...
+
+  const res = await fetch(`${BACKEND}/reservas${search}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => ({}));
+  return NextResponse.json(data, { status: res.status });
+}
+
+export async function POST(req: NextRequest) {
+  const token = await getToken();
+  const body = await req.json();
+
+  const res = await fetch(`${BACKEND}/reservas`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => ({}));
+  return NextResponse.json(data, { status: res.status });
+}

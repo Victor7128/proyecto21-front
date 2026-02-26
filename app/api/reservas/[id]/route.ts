@@ -1,19 +1,71 @@
-import { NextRequest } from "next/server";
-import { getByIdHandler, updateHandler, deleteHandler } from "@/lib/route-handler";
+import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { TOKEN_COOKIE } from "@/lib/auth";
 
-type Params = { params: Promise<{ id: string }> };
+const BACKEND = process.env.NEXT_PUBLIC_API_URL;
 
-export async function GET(req: NextRequest, { params }: Params) {
-  const { id } = await params;
-  return getByIdHandler(req, "/reservas", id);
+async function getToken() {
+  return (await cookies()).get(TOKEN_COOKIE)?.value;
 }
 
-export async function PUT(req: NextRequest, { params }: Params) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { id } = await params;
-  return updateHandler(req, "/reservas", id);
+  const token = await getToken();
+
+  const res = await fetch(`${BACKEND}/reservas/${id}`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => ({}));
+  return NextResponse.json(data, { status: res.status });
 }
 
-export async function DELETE(req: NextRequest, { params }: Params) {
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { id } = await params;
-  return deleteHandler(req, "/reservas", id);
+  const token = await getToken();
+  const body = await req.json();
+
+  const res = await fetch(`${BACKEND}/reservas/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => ({}));
+  return NextResponse.json(data, { status: res.status });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const token = await getToken();
+
+  const res = await fetch(`${BACKEND}/reservas/${id}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => ({}));
+  return NextResponse.json(data, { status: res.status });
 }

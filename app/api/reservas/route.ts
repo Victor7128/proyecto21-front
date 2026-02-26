@@ -3,8 +3,10 @@ import { cookies } from "next/headers";
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL;
 
+import { TOKEN_COOKIE } from "@/lib/auth";
+
 async function getToken() {
-  return (await cookies()).get("token")?.value;
+  return (await cookies()).get(TOKEN_COOKIE)?.value;
 }
 
 export async function GET(req: NextRequest) {
